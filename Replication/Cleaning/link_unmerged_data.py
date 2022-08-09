@@ -32,13 +32,13 @@ for i, postcode in enumerate(sorted(os.listdir(zip_data_directory))):
 		for prop2 in prices:
 
 			# For the SELSEY COUNTRY CLUB LITTLE SPAIN, the order of the secondary number is flipped in the price data. Manually fix it.
-			if prop2.house_number == "SELSEY COUNTRY CLUB LITTLE SPAIN":
-				prop2.second_number = prop2.second_number.split()[1] + " " + prop2.second_number.split()[0]
+			if prop2.street_number == "SELSEY COUNTRY CLUB LITTLE SPAIN":
+				prop2.flat_number = prop2.flat_number.split()[1] + " " + prop2.flat_number.split()[0]
 
 			for prop1 in leases:
 		
 				# We need at least one number to properly identify
-				if prop2.house_number=="" and prop2.second_number=="":
+				if prop2.street_number=="" and prop2.flat_number=="":
 					continue
 
 				# print("\n----------------------------------------\n")
@@ -57,7 +57,6 @@ for i, postcode in enumerate(sorted(os.listdir(zip_data_directory))):
 					# print(f"{prop2.split_address()}\n")
 
 					match_key = prop1.replace(" ", "")
-
 					new_matches.append([match_key, prop2.property_id])
 
 print("Matches:")

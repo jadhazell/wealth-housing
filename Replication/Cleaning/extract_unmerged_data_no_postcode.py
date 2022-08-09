@@ -32,15 +32,15 @@ prices_no_zip = pd.read_stata(no_postcode_prices_data_file)
 
 price_data_no_zip_by_city = dict()
 for index, row in prices_no_zip.iterrows():
-	house_number = row["house_number"]
-	second_number = row["secondary_number"]
+	street_number = row["street_number"]
+	flat_number = row["flat_number"]
 	street = row["street"]
 	locality = row["locality"]
 	city = row["city"]
 	postcode = row["postcode"]
 	property_id = row["property_id"]
 
-	prop = Property(house_number, second_number, street, locality, city, postcode, property_id)
+	prop = Property(street_number, flat_number, street, locality, city, postcode, property_id)
 
 	if prop.city in price_data_no_zip_by_city:
 		price_data_no_zip_by_city[prop.city].append(prop)
@@ -50,9 +50,10 @@ for index, row in prices_no_zip.iterrows():
 # Sort data into city-separated folders
 for city in price_data_no_zip_by_city:
 	city_folder = os.path.join(city_data_directory, city)
-	if not city in os.listdir(city_data_directory):
+	try:
 		os.mkdir(city_folder)
-		print("Made new folder:", city_folder)
+	except:
+		pass
 	file = os.path.join(city_folder, "price_properties_no_postcode.p")
 	with open(file, "wb") as f:
 		pickle.dump(price_data_no_zip_by_city[city], f)
@@ -79,7 +80,7 @@ print("Lease data by city...")
 lease_data_by_city = dict()
 invalid_data = []
 for index, row in tqdm(leases.iterrows()):
-	address = row["property_description"].replace(".","").replace(",","")
+	address = row["description"].replace(".","").replace(",","")
 	split_address = address.split()
 
 	#Check if lease data point has valid city
