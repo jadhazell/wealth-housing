@@ -511,7 +511,7 @@ gen merge_key = strtrim(stritrim(upper(description)))
 //Remove commas/periods
 replace merge_key = subinstr(merge_key,".","",.)
 replace merge_key = subinstr(merge_key,",","",.)
-replace merge_key = subinstr(merge_key,"''","",.)
+replace merge_key = subinstr(merge_key,"'","",.)
 replace merge_key = subinstr(merge_key," ","",.)
 
 //Drop missing entries

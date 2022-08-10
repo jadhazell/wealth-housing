@@ -6,18 +6,22 @@ from tqdm import tqdm
 from Property import Property
 from utilities import * 
 
-data_directory = "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_VBP/Data/gov_uk/"
-zip_data_directory = "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_VBP/Data/zip_divided/"
+root = "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_VBP"
+data_directory = os.path.join(root, "Data", "gov_uk")
+zip_data_directory = os.path.join(root, "Data", "zip_divided")
+#zip_data_directory = os.path.join(root, "Data", "zip_divided_2")
 
 
 new_matches = [["merge_key","property_id"]]
 
+print("Starting search...")
 for i, postcode in enumerate(sorted(os.listdir(zip_data_directory))):
+	
+	zip_directory = os.path.join(zip_data_directory, postcode)
 
 	# if postcode != "AL1 1AR":
 	# 	continue
 
-	zip_directory = os.path.join(zip_data_directory, postcode)
 	if os.path.isdir(zip_directory) and len(os.listdir(zip_directory)) == 2:
 		lease_file = os.path.join(zip_data_directory, postcode, "lease_properties.p")
 		price_file = os.path.join(zip_data_directory, postcode, "price_properties.p")
@@ -41,20 +45,13 @@ for i, postcode in enumerate(sorted(os.listdir(zip_data_directory))):
 				if prop2.street_number=="" and prop2.flat_number=="":
 					continue
 
-				# print("\n----------------------------------------\n")
-
-				# print(f"\nLease data point: {prop1}")
-				# print(f"Price data point: {prop2.address}")
-				# print(is_valid_street_and_locality(prop1, prop2))
-				# print(is_valid_number(prop1, prop2))
-
-				# Look for addresses that contain the street (or locality if missing street), house and secondary house number
-				if is_valid_street_and_locality(prop1, prop2) and is_valid_number(prop1, prop2) and no_invalid_terms(prop1, prop2):
-
+				# Look for addresses that contain house and secondary house number, no invalid terms, and either have a valid street/locality or are not missing either number
+				if  is_valid_number(prop1, prop2) and no_invalid_terms(prop1, prop2):
+					
 					print("Found a match!")
 					print(f"Lease data point: {prop1}")
-					print(f"Price data point: {prop2.address}\n")
-					# print(f"{prop2.split_address()}\n")
+					print(f"Price data point:{prop2.address} {postcode}\n")
+					print(f"{prop2.split_address()}\n")
 
 					match_key = prop1.replace(" ", "")
 					new_matches.append([match_key, prop2.property_id])

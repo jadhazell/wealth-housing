@@ -56,21 +56,25 @@ save "$WORKING/unmerged_price_data.dta", replace
 // Combine first and second merge:
 use "$WORKING/merge1.dta", clear
 append using "$WORKING/merge2.dta"
-duplicates drop property_id, force
 save "$WORKING/merge_keys.dta", replace
 
 // Combine with python merges:
 import delimited "$WORKING/matched_with_python.csv", varnames(1) clear
+save "$WORKING/matched_with_python.dta", replace
 gen merge_num = 3
 append using "$WORKING/merge_keys.dta"
+sort property_id
 
 // Deal with duplicates
-cap drop dup last_word second_to_last_word
+duplicates drop
+cap drop dup
 duplicates tag property_id, gen(dup)
 
 gen last_word = word(property_id, -1)
 gen second_to_last_word = word(property_id, -2)
 egen postcode = concat(second_to_last_word last_word), punct(" ")
+drop last_word second_to_last_word
+
 gen numbers = subinstr(property_id, postcode, "",.)
 replace numbers = subinstr(numbers, " ", "", .)
 
@@ -79,7 +83,7 @@ keep if dup==0 | (dup>0 & strpos(merge_key, numbers) == 1)
 
 // For now, drop remaining duplicates (they seem to be referring to the same thing though...)
 duplicates drop property_id, force
-duplicates drop merge_key, force
+// duplicates drop merge_key, force
 
 save "$WORKING/merge_keys.dta", replace
 
@@ -111,7 +115,7 @@ keep if dup==0 | (dup>0 & strpos(merge_key, property_id_no_spaces) == 1)
 duplicates drop property_id, force
 
 duplicates report merge_key
-duplicates drop merge_key, force
+// duplicates drop merge_key, force
 
 // Merge back into price data
 merge 1:m property_id using "$WORKING/cleaned_price_data_no_postcode_leaseholds.dta"
@@ -131,14 +135,19 @@ append using "$WORKING/merged_data_without_postcodes"
 // Merge back into lease data
 cap drop _merge
 merge m:m merge_key using "$WORKING/lease_data.dta"
+save "$WORKING/merged_data.dta", replace
 
 
 preserve
 	keep if _merge==1
 	keep postcode street street_number flat_number locality city property_id
 	drop if missing(postcode)
-	duplicates drop
+	duplicates drop property_id, force
 	sort postcode street street_number flat_number
+	
+	merge m:1 property_id using "$WORKING/duplicate_merges.dta"
+	drop if _merge!=1
+	
 	export delimited "$WORKING/unmerged_price_post_python.csv", replace
 	save "$WORKING/unmerged_price_post_python.dta", replace
 restore

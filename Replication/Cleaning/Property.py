@@ -1,12 +1,14 @@
+from utilities import *
+
 class Property:
 	def __init__(self, street_number, flat_number, street, locality, city, postcode, property_id):
-		self.street_number = street_number.replace(".","").replace(",","")
-		self.flat_number = flat_number.replace(".","").replace(",","")
-		self.street = street.replace(".","").replace(",","")
-		self.locality = locality.replace(".","").replace(",","")
-		self.city = city.replace(".","").replace(",","")
-		self.postcode = postcode.replace(".","").replace(",","")
-		self.property_id = property_id.replace(".","").replace(",","")
+		self.street_number = clean_number(street_number)
+		self.flat_number = clean_number(flat_number)
+		self.street = clean(street)
+		self.locality = clean(locality)
+		self.city = clean(city)
+		self.postcode = clean(city)
+		self.property_id = clean(property_id)
 		self.address = f"{self.flat_number} {self.street_number} {self.street} {self.locality} {self.city}"
 
 	def __str__(self):
@@ -15,4 +17,4 @@ class Property:
 		return output
 
 	def split_address(self):
-		return f" Second Number: {self.flat_number}\n House Number: {self.street_number}\n Street: {self.street}\n Locality: {self.locality}\n City: {self.city}"
+		return f" Flat Number: {self.flat_number}\n Street Number: {self.street_number}\n Street: {self.street}\n Locality: {self.locality}\n City: {self.city}"
