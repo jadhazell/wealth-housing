@@ -1,12 +1,12 @@
 
 import delimited "$DATA/pp-complete.txt", clear
 
-// Generate subset
+// //Generate subset
 // gen random = runiform()
 // sort random
 // keep if _n < 500000
-
-duplicates drop
+//
+// duplicates drop
 
 rename v1  unique_id
 rename v2  price
@@ -25,18 +25,11 @@ rename v14 county
 rename v15 record_status
 
 //Clean date
-gen     length_date = length(date)
-replace date = substr(date,1,length(date)-5) if length_date == 16
-replace date = substr(date,1,length(date)-8) if length_date == 19
-replace date = subinstr(date,"/","-",.)
-
-gen     date_trans = date(date,"DMY")
-replace date_trans = date(date,"YMD") if date_trans == .
-replace date       = substr(date,1,length(date)-2) + "20" + substr(date,length(date)-1,.) if date_trans == .
-replace date_trans = date(date,"DMY") if date_trans == .
+replace date = substr(date,1,7)
+gen date_trans = date(date,"YM")
 format  date_trans %td
 
-drop length_date date
+drop date
 
 // Clean address variables
 foreach var of varlist postcode street_number flat_number street locality city district county {
@@ -64,6 +57,7 @@ drop if duration == "U"
 //////////////////////////////////////
 // Investigate and drop duplicates
 //////////////////////////////////////
+duplicates drop
 
 // For each duplicates in terms of property_id and date (not counting descriptive vars), keep only one
 gsort property_id -locality -street -city // Prioritize data that is not missing locality
@@ -86,6 +80,12 @@ duplicates tag date_trans property_id, gen(dup_duration)
 browse date_trans property_id duration price type new if dup_duration > 0
 drop if dup_duration > 0
 save "$WORKING/full_price_data.dta", replace
+
+preserve
+	keep if duration == "F"
+	save "$WORKING/price_data_freeholds.dta", replace
+restore
+	
 
 drop if duration == "F"
 save "$WORKING/price_data_leaseholds.dta", replace
