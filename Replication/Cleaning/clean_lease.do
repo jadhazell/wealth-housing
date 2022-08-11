@@ -1,15 +1,17 @@
 
 import delimited "$DATA/LEASES_FULL_2022_06.csv", clear
 rename uniqueidentifier unique_id 
-rename dateoflease registered
+rename dateoflease date
 rename term lease_details
 rename associatedpropertydescription description
-keep unique_id registered lease_details description
+keep unique_id date lease_details description
 
 // Clean date
-gen    date_registered = date(registered,"DMY")
-format date_registered %td
-drop   registered
+
+replace date = substr(date,4,7)
+gen date_registered = date(date,"MY")
+format  date_registered %td
+drop date
 
 ////////////////////////////////////////////
 // Clean lease term based on GMS code
@@ -491,16 +493,16 @@ replace date_from    = date_start  if date_from == .
 
 compress
 
+save "$WORKING/full_lease_data_cleaned_term.dta", replace
+
 ********************************************************************************************************************************************** 
 * Drop the (small) number of leases of which we cannot extract lease details from the textual description
 * --> This number is small, given our extensive textual cleaning
 * --> Less than 0.2% of all lease details
 ********************************************************************************************************************************************** 
 
-drop if date_from    == .
+// drop if date_from    == .
 drop if number_years == .
-
-save "$WORKING/full_lease_data_cleaned_term.dta", replace
 
 ////////////////////////////////////////////
 // Make merge key
@@ -517,13 +519,39 @@ replace merge_key = subinstr(merge_key," ","",.)
 //Drop missing entries
 drop if missing(merge_key)
 
-// Drop duplicates
-keep description merge_key date_registered number_years date_from
+// Change date_from to MONTH-YEAR format
+gen month = month(date_from)
+gen year = year(date_from)
+egen date = concat(year month), punct("-")
+gen date2 = date(date, "YM")
+format date2 %td
+replace date_from = date2
+drop month year date date2
+
+drop if missing(date_registered)
+
+///////////////////////////////////
+// Deal with duplicates
+///////////////////////////////////
+duplicates drop
 // Drop in terms of all variables
 duplicates drop merge_key date_registered number_years date_from, force
+keep description merge_key date_registered number_years date_from
+
+// A couple ways to deal with remaining duplicates...
+
+// Option 1: set duplicates as missing
 duplicates tag merge_key date_registered, gen(dup)
-// Drop duplicates in terms of merge_key + date_registered
-drop if dup > 0
+gen number_years_missing = number_years
+replace number_years_missing = . if dup > 0
+
+// Option 2: take mean of duplicates
+by date_registered merge_key, sort: egen mean_years = mean(number_years)
+by date_registered merge_key, sort: egen mean_from = mean(date_from)
+format mean_from %td
+replace number_years = mean_years
+replace date_from = mean_from
+duplicates drop merge_key date_registered number_years date_from, force
 
 save "$WORKING/lease_data.dta", replace
 

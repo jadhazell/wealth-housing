@@ -1,13 +1,6 @@
 
 import delimited "$DATA/pp-complete.txt", clear
 
-// //Generate subset
-// gen random = runiform()
-// sort random
-// keep if _n < 500000
-//
-// duplicates drop
-
 rename v1  unique_id
 rename v2  price
 rename v3  date
@@ -29,8 +22,6 @@ replace date = substr(date,1,7)
 gen date_trans = date(date,"YM")
 format  date_trans %td
 
-drop date
-
 // Clean address variables
 foreach var of varlist postcode street_number flat_number street locality city district county {
 	replace `var' = subinstr(`var',".","",.)
@@ -39,6 +30,9 @@ foreach var of varlist postcode street_number flat_number street locality city d
 	replace `var' = subinstr(`var'," - ","-",.)
 	replace `var' = upper(strtrim(stritrim(`var')))
 }
+
+// Drop missing values
+drop if missing(street_number) & missing(flat_number)
 
 // Generate property id
 egen property_id = concat(flat_number street_number postcode), punct(" ")
@@ -53,6 +47,24 @@ replace property_id = property_id_mp if missing(postcode)
 
 // Drop if unknown property duration
 drop if duration == "U"
+
+compress
+save "$WORKING/pp-complete.dta", replace
+
+// Combine property ids that should belong to the same property:
+egen address_no_spaces = concat(flat_number street_number street city postcode), punct(" ")
+replace address_no_spaces = upper(strtrim(stritrim(address_no_spaces)))
+replace address_no_spaces = subinstr(address_no_spaces," ","",.)
+duplicates tag property_id, gen(dup)
+duplicates tag address_no_spaces, gen(dup_no_spaces)
+by address_no_spaces, sort: egen property_id_corrected_no_spaces = mode(property_id), max
+
+gen first_char = substr(street_number,1,1)
+gen first_char_is_numeric = real(first_char)!=.
+
+replace property_id = property_id_corrected_no_spaces if dup_no_spaces>0 & dup==0 & !first_char_is_numeric
+
+drop dup* property_id_corrected* address*
 
 //////////////////////////////////////
 // Investigate and drop duplicates
@@ -112,16 +124,6 @@ replace merge_key_2 = "" if locality==city | merge_key_1==merge_key_2
 // Remove spaces
 replace merge_key_1 = subinstr(merge_key_1," ","",.)
 replace merge_key_2 = subinstr(merge_key_2," ","",.)
-
-// Combine property ids that should belong to the same property:
-keep property_id date_trans merge_key* flat_number street_number street locality city postcode duration type new price
-duplicates tag property_id, gen(dup)
-duplicates tag merge_key_1, gen(dup1)
-
-by merge_key_1, sort: egen property_id_corrected = mode(property_id), max
-replace property_id = property_id_corrected if dup1 > 0
-
-drop dup* property_id_corrected
 
 save "$WORKING/cleaned_price_data_leaseholds.dta", replace
 

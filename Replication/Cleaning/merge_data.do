@@ -134,7 +134,7 @@ append using "$WORKING/merged_data_without_postcodes"
 
 // Merge back into lease data
 cap drop _merge
-merge m:m merge_key using "$WORKING/lease_data.dta"
+joinby merge_key using "$WORKING/lease_data.dta"
 save "$WORKING/merged_data.dta", replace
 
 
