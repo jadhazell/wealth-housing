@@ -1,42 +1,37 @@
-use "$WORKING/merged_data.dta", clear
+use "$WORKING/full_merged_data.dta", clear
+sort property_id date_trans
 
-// Keep only merged data 
-drop if missing(date_trans) | missing(date_registered)
-sort property_id date_trans date_registered
+////////////////////////////////////////////
+// Aggregate at quarter level
+////////////////////////////////////////////
 
-// Drop unnecessary variabes
-drop merge_num merge_key* unique_id property_id_* dup* numbers v16
+gen  year          = year(date_trans)
+gen month		   = month(date_trans)
+gen quarter = quarter(date_trans)
 
-// We want to keep the registration date that most closely precedes each transaction
-// Keep only observsations where for at least one date in the time period, the transaction date is the same or after the registration date 
-gen transaction_after_registration = date_trans >= date_registered
-by property_id, sort: egen temp = total(transaction_after_registration)
-drop if temp == 0
+gen date_trans2 = year + (quarter-1)/4
+drop date_trans
+rename date_trans2 date_trans
 
-by property_id date_trans, sort: egen most_recent_date_registered = max(date_registered)
-format most_recent_date_registered %td
-duplicates tag property_id date_trans, gen(dup)
-keep if date_registered == most_recent_date_registered
-drop most_recent_date_registered
+gen quarter_registered = quarter(date_registered)
+gen year_registered = year(date_registered)
+gen date_registered2 = year_registered + (quarter_registered-1)/4
+drop date_registered
+rename date_registered2 date_registered
 
-// Record time elapsed since start of date
-gen years_elapsed = round((date_trans - date_registered)/365)
+////////////////////////////////////////////
+// Generate useful variables
+////////////////////////////////////////////
 
+// Calculate information about lease term at each date
 // Record lease term at time of transactions
-gen number_years_at_trans = number_years - years_elapsed
-replace number_years_at_trans = . if number_years_at_trans < 0
-
-// Combine with freehold data
-append using "$WORKING/price_data_freeholds.dta"
+gen years_elapsed_at_transaction = date_trans - date_registered
+gen lease_duration_at_transaction = number_years - years_elapsed_at_transaction
 	
 // Leasehold indicator
 gen leasehold = (duration == "L")
 
-// Useful variables
-gen  year          = year(date_trans)
-gen month		   = month(date_trans)
-
-// Isolate each component of postcode
+// Isolate first component of postcode
 gen pos_empty   = strpos(postcode," ")
 gen location      = substr(postcode,1,pos_empty)
 replace location  = trim(location)
@@ -46,48 +41,71 @@ drop pos_empty
 egen location_n = group(location)
 egen type_n = group(type)
 
-compress
-cap drop _merge
-
 // Merge with interest rate data
-merge m:1 year month using "$WORKING/interest_rates.dta"
+cap drop _merge
+merge m:1 year quarter using "$WORKING/interest_rates.dta"
 keep if _merge==3
 drop _merge
-drop dup*
 
 save "$WORKING/full_cleaned_data.dta", replace
 
-///////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 // We are primarily interested in the change in price between transactions
-///////////////////////////////////////////////////
+// Generate logs of variables and collapse observations by date purchase/date sale
+////////////////////////////////////////////////////////////////////////////
 
-//Log change in price 
+//Generate lagged variables
 sort property_id date_trans
 by property_id: gen L_date_trans = date_trans[_n-1]
 by property_id: gen L_price = price[_n-1]
 by property_id: gen L_interest_rate = interest_rate[_n-1]
-
-format L_date_trans %td
+by property_id: gen L_years_elapsed_at_transaction = years_elapsed_at_transaction[_n-1]
+by property_id: gen L_lease_duration_at_transaction = lease_duration_at_transaction[_n-1]
+by property_id: gen L_date_registered = date_registered[_n-1]
 
 // Keep only observations that record change over time (this will delete all properties for which we only have on observation)
 drop if missing(L_date_trans)
+drop if leasehold & missing(date_registered)
+drop if leasehold & missing(L_date_registered)
 
-// Generate more variables of
+// Generate differenced variables
 gen d_price = price - L_price
-gen d_log_price = log(price) - log(L_price)
+gen d_log_price = 100*(log(price) - log(L_price))
 
 gen d_interest_rate = interest_rate - L_interest_rate
 gen d_log_interest_rate = log(interest_rate) - log(L_interest_rate)
 
-gen years_held = round((date_trans - L_date_trans)/365, 0.01)
+gen years_held = date_trans - L_date_trans
 
-gen quarter_purchase = quarter(L_date_trans)
-gen quarter_sale = quarter(date_trans)
+// Generate x_tiles of purchase price 
+xtile price_quintile = L_price, nq(5)
+xtile price_ventile = L_price, nq(20)
 
-// Tag leaseholds as above or below median term length
-egen med_term_lendth = median(number_years_at_trans)
-replace duration = "SL" if leasehold & number_years_at_trans < med_term_lendth
-replace duration = "LL" if leasehold & number_years_at_trans >= med_term_lendth
- 
+// Classify leaseholds as above and below median
+egen med_lease_duration_at_sale = median(lease_duration_at_transaction) if leasehold
+egen med_lease_duration_at_purchase = median(L_lease_duration_at_transaction) if leasehold
 
-save "$WORKING/full_cleaned_data_diff.dta", replace
+xtile duration_at_sale_n = lease_duration_at_transaction, nq(2)
+replace duration_at_sale_n = 3 if !leasehold
+
+xtile duration_at_purchase_n = L_lease_duration_at_transaction, nq(2)
+replace duration_at_purchase_n = 3 if !leasehold
+
+// gen duration_at_sale = "F" if !leasehold
+// gen duration_at_purchase = "F" if !leasehold
+//
+// replace duration_at_sale = "SL" if leasehold & lease_duration_at_transaction < med_lease_duration_at_sale
+// replace duration_at_sale = "LL" if leasehold & lease_duration_at_transaction >= med_lease_duration_at_sale
+//
+// replace duration_at_purchase = "SL" if leasehold & L_lease_duration_at_transaction < med_lease_duration_at_purchase
+// replace duration_at_purchase = "LL" if leasehold & L_lease_duration_at_transaction >= med_lease_duration_at_purchase
+//
+// gen duration_at_sale_n = 1 if duration_at_sale=="SL"
+// replace duration_at_sale_n = 2 if duration_at_sale=="LL"
+// replace duration_at_sale_n = 3 if duration_at_sale=="F"
+//
+// gen duration_at_purchase_n = 1 if duration_at_purchase=="SL"
+// replace duration_at_purchase_n = 2 if duration_at_purchase=="LL"
+// replace duration_at_purchase_n = 3 if duration_at_purchase=="F"
+
+save "$WORKING/full_cleaned_data_diff_restricted.dta", replace

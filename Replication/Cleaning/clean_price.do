@@ -105,9 +105,9 @@ save "$WORKING/price_data_leaseholds.dta", replace
 // Save data without postcodes -- we will deal with this separately
 preserve 
 	keep if missing(postcode)
-	save "$WORKING/cleaned_price_data_no_postcode_leaseholds_unique.dta", replace 
-	duplicates drop property_id, force
 	save "$WORKING/cleaned_price_data_no_postcode_leaseholds.dta", replace 
+	duplicates drop property_id, force
+	save "$WORKING/cleaned_price_data_no_postcode_leaseholds_unique.dta", replace 
 restore
 
 // Drop entries with missing postcode values
