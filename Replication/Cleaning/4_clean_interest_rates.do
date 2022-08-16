@@ -1,6 +1,12 @@
+
+global INTEREST_RATES "`1'"
+global WORKING "`2'"
+
+di "Interest rates data folder: $INTEREST_RATES"
+di "Working folder: $WORKING"
+
 // Monetary rates
 import delimited "$INTEREST_RATES/CTV_MonPolTransmission.csv", clear
-rename v1 date
 drop if missing(cesa_bianchi) & missing(cloyne_hurtgen)
 
 gen year = real(substr(v1, 1, 4))

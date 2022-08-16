@@ -1,3 +1,8 @@
+global DATA "`1'"
+global WORKING "`2'"
+
+di "Data folder: $DATA"
+di "Working folder: $WORKING"
 
 import delimited "$DATA/pp-complete.txt", clear
 

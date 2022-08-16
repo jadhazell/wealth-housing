@@ -1,3 +1,8 @@
+global DATA "`1'"
+global WORKING "`2'"
+
+di "Data folder: $DATA"
+di "Working folder: $WORKING"
 
 import delimited "$DATA/LEASES_FULL_2022_06.csv", clear
 rename uniqueidentifier unique_id 
@@ -412,7 +417,7 @@ replace  to_place = strpos(lease_details,"expiring ")     if to_place == 0
 replace  to_place = strpos(lease_details,"and ending")    if to_place == 0
 replace  to_place = strpos(lease_details,"ending")        if to_place == 0
 replace  to_place = strpos(lease_details,"and ends")      if to_place == 0
- 
+
 cap drop part*
 gen part1 = substr(lease_details,1,to_place-1) if to_place > 3 & number_years == .
 gen part2 = substr(lease_details,to_place,.) if to_place > 3 & number_years == .

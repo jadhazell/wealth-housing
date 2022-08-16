@@ -1,3 +1,9 @@
+global WORKING "`1'"
+global OUTPUT "`2'"
+
+di "Working folder: $WORKING"
+di "Output folder: $OUTPUT"
+
 use "$WORKING/full_merged_data.dta", clear
 sort property_id date_trans
 
@@ -47,7 +53,7 @@ merge m:1 year quarter using "$WORKING/interest_rates.dta"
 keep if _merge==3
 drop _merge
 
-save "$WORKING/full_cleaned_data.dta", replace
+save "$OUTPUT/full_cleaned_data.dta", replace
 
 ////////////////////////////////////////////////////////////////////////////
 // We are primarily interested in the change in price between transactions
@@ -108,4 +114,4 @@ replace duration_at_purchase_n = 3 if !leasehold
 // replace duration_at_purchase_n = 2 if duration_at_purchase=="LL"
 // replace duration_at_purchase_n = 3 if duration_at_purchase=="F"
 
-save "$WORKING/full_cleaned_data_diff_restricted.dta", replace
+save "$OUTPUT/full_cleaned_data_diff_restricted.dta", replace
