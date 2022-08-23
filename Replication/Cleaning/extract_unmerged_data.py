@@ -70,7 +70,7 @@ def extract_unmerged_price_data(unmerged_prices_data_file, divided_data_director
 				price_data[postcode] = [prop]
 		
 		elif division_level == "city":
-			if postcode in price_data:
+			if city in price_data:
 				price_data[city].append(prop)
 			else:
 				price_data[city] = [prop]
@@ -172,6 +172,8 @@ def main(data_directory, divided_data_directory, division_level="postcode"):
 	if division_level == "postcode":
 		price_file = "unmerged_price_data.dta"
 		lease_file = "unmerged_lease_data.dta"
+		# price_file = "price_data.dta"
+		# lease_file = "lease_data_for_merge.dta"
 	elif division_level == "city":
 		price_file = "cleaned_price_data_no_postcode_leaseholds.dta"
 		lease_file = "unmerged_lease_data_for_no_postcode_cleaning.dta"

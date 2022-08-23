@@ -7,9 +7,9 @@ class Property:
 		self.street = clean(street)
 		self.locality = clean(locality)
 		self.city = clean(city)
-		self.postcode = clean(city)
+		self.postcode = clean(postcode)
 		self.property_id = clean(property_id)
-		self.address = f"{self.flat_number} {self.street_number} {self.street} {self.locality} {self.city}"
+		self.address = f"{self.flat_number} {self.street_number} {self.street} {self.locality} {self.city} {self.postcode}"
 
 	def __str__(self):
 		output = f"Property ID: {self.property_id}\n"

@@ -41,8 +41,26 @@ preserve
 	save "$WORKING/unmerged_lease_post_python.dta", replace
 restore
 
-// Keep only merged data 
 sort property_id date_trans date_registered
+drop v16 unique_id merge_key* merge_num property_id_* dup* date
+
+////////////////////////////////////////////
+// Aggregate at quarter level
+////////////////////////////////////////////
+
+gen  year          = year(date_trans)
+gen quarter = quarter(date_trans)
+
+gen date_trans2 = year + (quarter-1)/4
+drop date_trans
+rename date_trans2 date_trans
+
+gen quarter_registered = quarter(date_registered)
+gen year_registered = year(date_registered)
+gen date_registered2 = year_registered + (quarter_registered-1)/4
+drop date_registered quarter_registered year_registered
+rename date_registered2 date_registered
+duplicates drop property_id date_trans date_registered, force
 
 // We want to keep the registration date that most closely precedes each transaction
 // Keep only observsations where the transaction date is the same or after the registration date 
@@ -57,8 +75,6 @@ drop most_recent_date_registered
 // Merge back into full price data set
 
 merge 1:1 property_id date_trans using "$WORKING/full_price_data.dta"
-
-// Drop unnecessary vars
-drop v16 unique_id merge_key* merge_num property_id_* dup* _merge date
+drop _merge
 
 save "$WORKING/full_merged_data.dta", replace

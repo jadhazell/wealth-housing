@@ -22,15 +22,19 @@ rename v13 district
 rename v14 county
 rename v15 record_status
 
-//Clean date
+// Clean date + aggregate at quarter level
 replace date = substr(date,1,7)
 gen date_trans = date(date,"YM")
-format  date_trans %td
+gen  year = year(date_trans)
+gen quarter = quarter(date_trans)
+gen date_trans2 = year + (quarter-1)/4
+drop date_trans
+rename date_trans2 date_trans
 
 // Clean address variables
 foreach var of varlist postcode street_number flat_number street locality city district county {
 	replace `var' = subinstr(`var',".","",.)
-	replace `var' = subinstr(`var',",","",.)
+// 	replace `var' = subinstr(`var',",","",.)
 	replace `var' = subinstr(`var',"'","",.)
 	replace `var' = subinstr(`var'," - ","-",.)
 	replace `var' = upper(strtrim(stritrim(`var')))
@@ -96,7 +100,9 @@ drop if dup_new > 0
 duplicates tag date_trans property_id, gen(dup_duration)
 browse date_trans property_id duration price type new if dup_duration > 0
 drop if dup_duration > 0
+
 save "$WORKING/full_price_data.dta", replace
+
 
 preserve
 	keep if duration == "F"

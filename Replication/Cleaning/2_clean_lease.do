@@ -15,8 +15,11 @@ keep unique_id date lease_details description
 
 replace date = substr(date,4,7)
 gen date_registered = date(date,"MY")
-format  date_registered %td
-drop date
+gen  year = year(date_registered)
+gen quarter = quarter(date_registered)
+gen date_registered2 = year + (quarter-1)/4
+drop date_registered date
+rename date_registered2 date_registered
 
 ////////////////////////////////////////////
 // Clean lease term based on GMS code
@@ -506,6 +509,8 @@ save "$WORKING/full_lease_data_cleaned_term.dta", replace
 * --> Less than 0.2% of all lease details
 ********************************************************************************************************************************************** 
 
+use "$WORKING/full_lease_data_cleaned_term.dta", clear
+
 // drop if date_from    == .
 drop if number_years == .
 
@@ -517,7 +522,7 @@ gen merge_key = strtrim(stritrim(upper(description)))
 
 //Remove commas/periods
 replace merge_key = subinstr(merge_key,".","",.)
-replace merge_key = subinstr(merge_key,",","",.)
+// replace merge_key = subinstr(merge_key,",","",.)
 replace merge_key = subinstr(merge_key,"'","",.)
 replace merge_key = subinstr(merge_key," ","",.)
 
@@ -525,13 +530,13 @@ replace merge_key = subinstr(merge_key," ","",.)
 drop if missing(merge_key)
 
 // Change date_from to MONTH-YEAR format
-gen month = month(date_from)
-gen year = year(date_from)
-egen date = concat(year month), punct("-")
-gen date2 = date(date, "YM")
-format date2 %td
-replace date_from = date2
-drop month year date date2
+gen month_from = month(date_from)
+gen year_from = year(date_from)
+egen date_from_str = concat(year month), punct("-")
+gen date_from_num = date(date_from_str, "YM")
+format date_from_num %td
+replace date_from = date_from_num
+drop month year date_from_str date_from_num
 
 drop if missing(date_registered)
 

@@ -39,6 +39,13 @@ def identify_and_write_matches(data_directory, divided_data_directory, division_
 					if prop2.street_number=="" and prop2.flat_number=="":
 						continue
 
+					# print(f"Lease data point: {prop1}")
+					# print(f"Price data point:{prop2.address}\n")
+					# print(is_valid_street_and_locality(prop1, prop2))
+					# print(is_valid_number(prop1, prop2))
+					# print(no_invalid_terms(prop1, prop2))
+					# print("\n")
+
 					# Look for addresses that contain house and secondary house number, no invalid terms, and either have a valid street/locality or are not missing either number
 					if (division_level == "postcode" and is_valid_number(prop1, prop2) and no_invalid_terms(prop1, prop2)) or \
 						(division_level == "city" and is_valid_street_and_locality(prop1, prop2) and is_valid_number(prop1, prop2) and no_invalid_terms(prop1, prop2)):
@@ -47,7 +54,7 @@ def identify_and_write_matches(data_directory, divided_data_directory, division_
 							print("Found a match!")
 							print(f"Lease data point: {prop1}")
 							print(f"Price data point:{prop2.address}\n")
-							print(f"{prop2.split_address()}\n")
+							# print(f"{prop2.split_address()}\n")
 
 						match_key = prop1.replace(" ", "")
 						new_matches.append([match_key, prop2.property_id])

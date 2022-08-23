@@ -75,6 +75,7 @@ if __name__ == "__main__":
 
 	print("Wait for the message 'DONE' to show up. The Stata dofile run in the background so it might seem like the program is finished when it isn't")
 
+
 	run_stata("1_set_presets.do", input_folder=input_folder, output_folder=output_folder)
 	run_stata("2_clean_lease.do", input_folder=housing_data_folder, output_folder=stata_working_folder)
 	run_stata("3_clean_price.do", input_folder=housing_data_folder, output_folder=stata_working_folder)
