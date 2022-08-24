@@ -1,7 +1,7 @@
 global INPUT "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_VBP/Cleaning/Output"
 global RESULTS "/Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Lease Extensions"
 
-use "$INPUT/final_data.dta", clear
+use "$INPUT/final_data_with_extensions.dta", clear
 
 // Generate summary stats
 replace lease_duration_at_trans = 0 if !leasehold // Do this so that freeholds are still counted
@@ -31,8 +31,6 @@ esttab using "$RESULTS/main_regression.tex", ///
 // Divide data by how many years there were between the purchase registration date and the sale registration date if the lease was extended
 gen diff = date_registered - L_date_registered
 replace diff = . if !lease_was_extended
-xtile ext_bucket=diff, nq(5)
-replace bucket_3_sale = ext_bucket + 3 if lease_was_extended
 
 // Generate summary stats for lease extensions by difference between purchase and sale registration date
 eststo clear
@@ -77,7 +75,12 @@ graph export "$RESULTS/scatter_non_negative.png", replace
 twoway (scatter number_years number_years_before_renewal) (lfit number_years number_years_before_renewal) if lease_was_extended & extension_amt > 10
 graph export "$RESULTS/scatter_greater_than_10.png", replace
 
-// Regression
+// Regression, separating lease extensions by length of extension
+gen ext_bucket=1 if lease_was_extended & extension_amt < 0
+replace ext_bucket=2 if lease_was_extended & extension_amt >= 0 & extension_amt < 10
+replace ext_bucket=3 if lease_was_extended & extension_amt >= 10 & extension_amt < 200
+replace ext_bucket=4 if lease_was_extended & extension_amt >= 200
+replace bucket_3_sale = ext_bucket + 3 if lease_was_extended
 
 eststo clear 
  eststo: reghdfe d_log_price i.bucket_3_sale##c.d_interest_rate, absorb(i.location_n##i.date_trans##i.L_date_trans) cluster(date_trans L_date_trans location_n)
@@ -93,14 +96,12 @@ esttab using "$RESULTS/main_regression_divided.tex", ///
 	4.bucket_3_sale#c.d_interest_rate ///
 	5.bucket_3_sale#c.d_interest_rate ///
 	6.bucket_3_sale#c.d_interest_rate ///
-	7.bucket_3_sale#c.d_interest_rate ///
-	8.bucket_3_sale#c.d_interest_rate) ///
+	7.bucket_3_sale#c.d_interest_rate) ///
 	varlabels( ///
 	2.bucket_3_sale#c.d_interest_rate "\multirow{2}{4cm}{High Duration Leasehold x $\Delta$ Interest Rate}" /// 
 	3.bucket_3_sale#c.d_interest_rate "\multirow{2}{4cm}{Freehold x $\Delta$ Interest Rate}" ///
-	4.bucket_3_sale#c.d_interest_rate "\multirow{2}{4cm}{Diff 1 x $\Delta$ Interest Rate}" ///
-	5.bucket_3_sale#c.d_interest_rate "\multirow{2}{4cm}{Diff 2 x $\Delta$ Interest Rate}" ///
-	6.bucket_3_sale#c.d_interest_rate "\multirow{2}{4cm}{Diff 3 x $\Delta$ Interest Rate}" ///
-	7.bucket_3_sale#c.d_interest_rate "\multirow{2}{4cm}{Diff 4 x $\Delta$ Interest Rate}" ///
-	8.bucket_3_sale#c.d_interest_rate "\multirow{2}{4cm}{Diff 5 x $\Delta$ Interest Rate}") gaps replace
-
+	4.bucket_3_sale#c.d_interest_rate "\multirow{2}{4cm}{Negative Extensions x $\Delta$ Interest Rate}" ///
+	5.bucket_3_sale#c.d_interest_rate "\multirow{2}{4cm}{Near Zero Extensions x $\Delta$ Interest Rate}" ///
+	6.bucket_3_sale#c.d_interest_rate "\multirow{2}{4cm}{Short Extensions (10-200 years) x $\Delta$ Interest Rate}" ///
+	7.bucket_3_sale#c.d_interest_rate "\multirow{2}{4cm}{Long Extensions (200+ years) x $\Delta$ Interest Rate}") ///
+	gaps replace

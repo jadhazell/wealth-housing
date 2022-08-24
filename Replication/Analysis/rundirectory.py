@@ -49,50 +49,33 @@ def run_python(script, *args):
 #####################################################################
 if __name__ == "__main__":
 	# Redirect to cleaning ddirectory, if we are not there yet
-	cleaning_directory = "/Users/vbp/Dropbox (Personal)/Mac/Documents/Princeton/wealth-housing/Replication/Cleaning"
 	analysis_directory = "/Users/vbp/Dropbox (Personal)/Mac/Documents/Princeton/wealth-housing/Replication/Analysis"
-	os.chdir(cleaning_directory)
+	os.chdir(analysis_directory)
 
 	# Set stata location
 	stata_path_mac = "/Applications/Stata/StataMP.app/Contents/MacOS/stata-mp"
 	stata_path_win = "C:/Program Files (x86)/Stata13/StataMP-64.exe"
 
-	# Set folders
-	main_dir = "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_VBP/Cleaning"
+	# # Set folders
+	# main_dir = "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_VBP/Cleaning"
 	
-	# Input (raw) data
-	input_folder = os.path.join(main_dir, "Input")
-	housing_data_folder = os.path.join(input_folder, "gov_uk")
-	interest_rate_data_folder = os.path.join(input_folder, "interest_rates")
+	# # Input (raw) data
+	# input_folder = os.path.join(main_dir, "Input")
+	# housing_data_folder = os.path.join(input_folder, "gov_uk")
+	# interest_rate_data_folder = os.path.join(input_folder, "interest_rates")
 
-	# Working data
-	working_folder = os.path.join(main_dir, "Working")
-	python_working_folder = os.path.join(working_folder, "python_working")
-	stata_working_folder = os.path.join(working_folder, "stata_working")
+	# # Working data
+	# working_folder = os.path.join(main_dir, "Working")
+	# python_working_folder = os.path.join(working_folder, "python_working")
+	# stata_working_folder = os.path.join(working_folder, "stata_working")
 
-	# Output (cleaned) data
-	output_folder = os.path.join(main_dir, "Output")
+	# # Output (cleaned) data
+	# output_folder = os.path.join(main_dir, "Output")
 
 
 	print("Wait for the message 'DONE' to show up. The Stata dofile run in the background so it might seem like the program is finished when it isn't")
 
-
-	# run_stata("1_set_presets.do", input_folder=input_folder, output_folder=output_folder)
-	# run_stata("2_clean_lease.do", input_folder=housing_data_folder, output_folder=stata_working_folder)
-	run_stata("3_clean_price.do", input_folder=housing_data_folder, output_folder=stata_working_folder)
-	# run_stata("4_clean_interest_rates.do", input_folder=interest_rate_data_folder, output_folder=stata_working_folder)
-	# run_stata("5_merge_on_merge_keys.do", input_folder=stata_working_folder)
-	# run_python("extract_unmerged_data.py", "postcode", stata_working_folder, python_working_folder)
-	# run_python("link_unmerged_data.py", "postcode", stata_working_folder, python_working_folder)
-	run_stata("6_merge_python_results_postcodes.do", input_folder=stata_working_folder)
-	run_python("extract_unmerged_data.py", "city", stata_working_folder, python_working_folder)
-	run_python("link_unmerged_data.py", "city", stata_working_folder, python_working_folder)
-	run_stata("7_merge_python_results_no_postcodes.do", input_folder=stata_working_folder)
-	run_stata("8_merge_all_data.do", input_folder=stata_working_folder)
-	# run_stata("9_finalize_data.do", input_folder=stata_working_folder, output_folder=output_folder)
-
-	# os.chdir(analysis_directory)
-	# run_stata("snowballing.do")
+	run_stata("snowballing.do")
 	# run_stata("lease_extensions.do")
 	# run_stata("more_lease_variation.do")
 

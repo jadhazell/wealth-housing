@@ -122,7 +122,7 @@ def extract_unmerged_lease_data(unmerged_lease_data_file, divided_data_directory
 	lease_data = dict()
 	invalid_data = []
 	for index, row in tqdm(leases.iterrows()):
-		address = clean(row["description"])
+		address = row["description"]
 		split_address = address.split()
 
 		if division_level == "postcode":		

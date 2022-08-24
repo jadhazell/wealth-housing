@@ -33,11 +33,13 @@ def identify_and_write_matches(data_directory, divided_data_directory, division_
 				if prop2.street_number == "SELSEY COUNTRY CLUB LITTLE SPAIN":
 					prop2.flat_number = prop2.flat_number.split()[1] + " " + prop2.flat_number.split()[0]
 
-				for prop1 in leases:
-			
-					# We need at least one number to properly identify
-					if prop2.street_number=="" and prop2.flat_number=="":
-						continue
+				# We need at least one number to properly identify
+				if prop2.street_number=="" and prop2.flat_number=="":
+					continue
+
+				for prop1_not_cleaned in leases:
+
+					prop1 = clean(prop1_not_cleaned)
 
 					# print(f"Lease data point: {prop1}")
 					# print(f"Price data point:{prop2.address}\n")
@@ -56,7 +58,7 @@ def identify_and_write_matches(data_directory, divided_data_directory, division_
 							print(f"Price data point:{prop2.address}\n")
 							# print(f"{prop2.split_address()}\n")
 
-						match_key = prop1.replace(" ", "")
+						match_key = prop1_not_cleaned.replace(".","").replace("'","").replace(" ", "")
 						new_matches.append([match_key, prop2.property_id])
 
 	print("Number of matches:", len(new_matches))

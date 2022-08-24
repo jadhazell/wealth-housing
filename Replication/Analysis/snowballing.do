@@ -1,16 +1,68 @@
 global INPUT "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_VBP/Cleaning/Output"
 global RESULTS "/Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Snowballing"
 
+use "$INPUT/final_data.dta", clear
+
 label var d_price "$\Delta$ house price"
+label var interest_rate "Sale Interest Rate"
+label var L_interest_rate "Purchase Interest Rate"
+label var d_interest_rate "$\Delta$ Interest Rate"
+label var price "Sale Price"
+label var L_price "Purchase Price"
+label var d_log_price "$\Delta$ log(Price)"
+label var date_trans "Sale Date"
+label var L_date_trans "Purchase Date"
+label var years_held "Years Held"
 // Get summary stats
-estpost tabstat d_log_price d_price d_interest_rate lease_duration_at_trans, by(year_bucket_sale) statistics(mean sd) columns(statistics) listwise
-esttab using "$RESULTS/summary_by_year_sale.tex", main(mean) aux(sd) nostar nonumber unstack label noobs nonote title("Stats By Year of Sale \label{tab: summary by year of sale}") replace
+eststo clear
+estpost tabstat L_interest_rate interest_rate d_interest_rate L_date_trans date_trans years_held L_price price d_log_price, by(year_bucket_sale) statistics(mean sd) columns(statistics) listwise
+esttab using "$RESULTS/summary_by_year_sale.tex", main(mean) aux(sd) nostar nonumber unstack label noobs nonote title("Stats By Year of Sale \label{tab: summary by year of sale}") varlabels(, elist(d_interest_rate "\hline" years_held "\hline")) replace
 
-estpost tabstat d_log_price d_price d_interest_rate lease_duration_at_trans, by(year_bucket_purchase) statistics(mean sd) columns(statistics) listwise
-esttab using "$RESULTS/summary_by_year_purchase.tex", main(mean) aux(sd) nonumber nostar unstack label noobs nonote title("Stats By Year of Purchase \label{tab: summary by year of purchase}") replace
+eststo clear
+estpost tabstat L_interest_rate interest_rate d_interest_rate L_date_trans date_trans years_held L_price price d_log_price, by(year_bucket_purchase) statistics(mean sd) columns(statistics) listwise
+esttab using "$RESULTS/summary_by_year_purchase.tex", main(mean) aux(sd) nonumber nostar unstack label noobs nonote title("Stats By Year of Purchase \label{tab: summary by year of purchase}") varlabels(, elist(d_interest_rate "\hline" years_held "\hline")) replace
 
-estpost tabstat d_log_price d_price d_interest_rate lease_duration_at_trans, by(year_bucket_half_way) statistics(mean sd) columns(statistics) listwise
-esttab using "$RESULTS/summary_by_year_halfway.tex", main(mean) aux(sd) nonumber nostar unstack label noobs nonote title("Stats By Halfway Year Between Purchase and Sale \label{tab: summary by halfway year}")replace
+eststo clear
+estpost tabstat L_interest_rate interest_rate d_interest_rate L_date_trans date_trans years_held L_price price d_log_price, by(year_bucket_half_way) statistics(mean sd) columns(statistics) listwise
+esttab using "$RESULTS/summary_by_year_halfway.tex", main(mean) aux(sd) nonumber nostar unstack label noobs nonote title("Stats By Halfway Year Between Purchase and Sale \label{tab: summary by halfway year}") varlabels(, elist(d_interest_rate "\hline" years_held "\hline")) replace
+
+//////////////////////////////////////////////////////////
+// Include interest rate level interaction in regression
+//////////////////////////////////////////////////////////
+
+gen med_interest_rate = (interest_rate+L_interest_rate)/2
+
+local interest_rate_labels "Sale Rate" "Purchase Rate" "Midpoint Rate"
+local bucket_name bucket_3_sale
+
+local count = 0
+foreach rate_var of varlist interest_rate L_interest_rate med_interest_rate {
+	local count = `count'+1
+	local interest_rate_label : word `count' of "`interest_rate_labels'"
+
+	eststo clear 
+	eststo: reghdfe d_log_price i.`bucket_name'##c.d_interest_rate##c.`rate_var', absorb(i.location_n##i.date_trans##i.L_date_trans) cluster(date_trans L_date_trans location_n)
+	eststo: reghdfe d_log_price i.`bucket_name'##c.d_interest_rate##c.`rate_var', absorb(i.location_n##i.date_trans##i.L_date_trans##i.type_n) cluster(date_trans L_date_trans location_n)
+	eststo: reghdfe d_log_price i.`bucket_name'##c.d_interest_rate##c.`rate_var', absorb(i.location_n##i.date_trans##i.L_date_trans##i.price_quintile##i.type_n) cluster(date_trans L_date_trans location_n)
+	eststo: reghdfe d_log_price i.`bucket_name'##c.d_interest_rate##c.`rate_var', absorb(i.location_n##i.date_trans##i.L_date_trans##i.type_n i.location_n##i.`bucket_name') cluster(date_trans L_date_trans location_n)
+
+
+	esttab using "$RESULTS/snowballing_regression_`rate_var'.tex", ///
+		se title("Regression Results With Interacted `interest_rate_label' Level \label{tab: `interest_rate_label'}") ///
+		keep(2.`bucket_name'#c.d_interest_rate ///
+			 3.`bucket_name'#c.d_interest_rate ///
+			 2.`bucket_name'#c.d_interest_rate#c.`rate_var' ///
+			 3.`bucket_name'#c.d_interest_rate#c.`rate_var') ///
+		varlabels(2.`bucket_name'#c.d_interest_rate "\multirow{2}{4cm}{High Duration Leasehold x $\Delta$ Rate}" ///
+				  3.`bucket_name'#c.d_interest_rate "\multirow{2}{4cm}{Freehold x $\Delta$ Rate}" ///
+				  2.`bucket_name'#c.d_interest_rate#c.`rate_var' "\multirow{2}{4.5cm}{High Duration Leasehold x $\Delta$ Rate x `interest_rate_label'}" ///
+				  3.`bucket_name'#c.d_interest_rate#c.`rate_var' "\multirow{2}{4cm}{Freehold x $\Delta$ Rate x `interest_rate_label'}") ///
+		gaps replace
+}
+
+//////////////////////////////////////////////////////////
+// Regress on particular year blocks
+//////////////////////////////////////////////////////////
 
 // Run regressions only on main specification
 

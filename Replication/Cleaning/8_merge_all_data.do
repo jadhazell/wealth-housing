@@ -10,6 +10,9 @@ use "$WORKING/merged_data_with_postcodes", clear
 append using "$WORKING/merged_data_without_postcodes"
 drop if missing(date_trans)
 
+di "Number of merged observations:"
+di _N
+
 /////////////////////////////////////
 // MERGE DATA INTO LEASE DATA
 /////////////////////////////////////
@@ -18,28 +21,6 @@ drop if missing(date_trans)
 cap drop _merge
 joinby merge_key using "$WORKING/lease_data.dta"
 save "$WORKING/merged_data.dta", replace
-
-// Store unmerged data in case we want to review it later on
-preserve
-	keep if _merge==1
-	keep postcode street street_number flat_number locality city property_id
-	drop if missing(postcode)
-	duplicates drop property_id, force
-	sort postcode street street_number flat_number
-	
-	merge m:1 property_id using "$WORKING/duplicate_merges.dta"
-	drop if _merge!=1
-	
-	export delimited "$WORKING/unmerged_price_post_python.csv", replace
-	save "$WORKING/unmerged_price_post_python.dta", replace
-restore
-
-preserve
-	keep if _merge==2
-	keep description
-	export delimited "$WORKING/unmerged_lease_post_python.csv", replace
-	save "$WORKING/unmerged_lease_post_python.dta", replace
-restore
 
 sort property_id date_trans date_registered
 drop v16 unique_id merge_key* merge_num property_id_* dup* date

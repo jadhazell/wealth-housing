@@ -12,8 +12,8 @@ use "$WORKING/full_merged_data.dta", clear
 
 // Calculate information about lease term at each date
 // Record lease term at time of transactions
-gen years_elapsed_at_transaction = date_trans - date_registered
-gen lease_duration_at_transaction = number_years - years_elapsed_at_transaction
+gen years_elapsed_at_trans = date_trans - date_registered
+gen lease_duration_at_trans = number_years - years_elapsed_at_transaction
 	
 // Leasehold indicator
 gen leasehold = (duration == "L")
@@ -33,6 +33,9 @@ cap drop _merge
 merge m:1 year quarter using "$WORKING/interest_rates.dta"
 keep if _merge==3
 drop _merge
+
+xtile bucket_3 = lease_duration_at_trans, nq(2)
+replace bucket_3 = 3 if !leasehold
 
 save "$OUTPUT/full_cleaned_data.dta", replace
 
@@ -63,6 +66,9 @@ drop if leasehold & missing(date_registered)
 gen has_purchase_lease = 1
 replace has_purchase_lease = 0 if leasehold & missing(L_date_registered)
 
+// For now, drop observations for which we do not have purchase lease information
+drop if !has_purchase_lease
+
 // (2) Tag data for which the lease was extended half way through the ownership
 gen lease_was_extended = 0
 replace lease_was_extended = 1 if leasehold & has_purchase_lease & date_registered != L_date_registered
@@ -78,98 +84,45 @@ gen years_held = date_trans - L_date_trans
 
 //////////////////////////////////////////////////////////
 // Classify data into percentiles:
-// Create percentiles for three categories: 
-// (1) All data (including data with no lease information in lagged period)
-// (2) Excluding data with no lease information in lagged period
-// (3) Like (2) but also excluding data where lease was extended half way through ownership
 /////////////////////////////////////////////////////////////
 
-// (1) All data:
-rename lease_duration_at_transaction lease_duration_at_trans_all
-rename L_lease_duration_at_transaction L_lease_duration_at_trans_all
-
+// (1) Data with lease extensions:
 // Generate x_tiles of purchase price 
-xtile price_quintile_all = L_price, nq(5)
-xtile price_ventile_all = L_price, nq(20)
-
-// // Classify leaseholds by x-tile
-// xtile bucket_3_sale_all = lease_duration_at_trans_all, nq(2)
-// replace bucket_3_sale_all = 3 if !leasehold
-//
-// xtile bucket_3_purchase_all = L_lease_duration_at_trans_all, nq(2)
-// replace bucket_3_purchase_all = 3 if !leasehold
-//
-// xtile bucket_6_sale_all = lease_duration_at_trans_all, nq(5)
-// replace bucket_6_sale_all = 6 if !leasehold
-//
-// xtile bucket_6_purchase_all = L_lease_duration_at_trans_all, nq(5)
-// replace bucket_6_purchase_all = 6 if !leasehold
-
-// (2) Repeat but excluding data that is missing purchase lease duration 
-// Generate x_tiles of purchase price 
-gen L_price_has_purchase_lease = L_price 
-replace L_price_has_purchase_lease = . if !has_purchase_lease
-
-xtile price_quintile = L_price_has_purchase_lease, nq(5) 
-xtile price_ventile = L_price_has_purchase_lease, nq(20)
+xtile price_quintile = L_price, nq(5) 
+xtile price_ventile = L_price, nq(20)
 
 // Classify leaseholds by x-tile
-gen lease_duration_at_trans = lease_duration_at_trans_all
-replace lease_duration_at_trans = .  if !has_purchase_lease
-
-gen L_lease_duration_at_trans = L_lease_duration_at_trans_all
-replace L_lease_duration_at_trans = .  if !has_purchase_lease
-
 xtile bucket_3_sale = lease_duration_at_trans, nq(2)
 replace bucket_3_sale = 3 if !leasehold
 replace bucket_3_sale = 4 if lease_was_extended // flag data for which lease was extended as different
-
-xtile bucket_3_purchase = L_lease_duration_at_trans, nq(2)
-replace bucket_3_purchase = 3 if !leasehold
-replace bucket_3_purchase = 4 if lease_was_extended // flag data for which lease was extended as different
 
 xtile bucket_6_sale = lease_duration_at_trans, nq(5)
 replace bucket_6_sale = 6 if !leasehold
 replace bucket_6_sale = 7 if lease_was_extended
 
-xtile bucket_6_purchase = L_lease_duration_at_trans, nq(5)
-replace bucket_6_purchase = 6 if !leasehold
-replace bucket_6_purchase = 7 if lease_was_extended
-
 xtile bucket_11_sale = lease_duration_at_trans, nq(10)
 replace bucket_11_sale = 11 if !leasehold
 replace bucket_11_sale = 12 if lease_was_extended
 
-xtile bucket_11_purchase = L_lease_duration_at_trans, nq(10)
-replace bucket_11_purchase = 11 if !leasehold
-replace bucket_11_purchase = 12 if lease_was_extended
+save "$OUTPUT/final_data_with_extensions.dta", replace
 
-// // (3) Repeat but excluding data where lease is extended (nr = not extended)
-// // Generate x_tiles of purchase price 
-// gen L_price_no_ext = L_price_has_purchase_lease 
-// replace L_price_no_ext = . if lease_was_extended
-//
-// xtile price_quintile_no_ext = L_price_no_ext, nq(5)
-// xtile price_ventile_no_ext = L_price_no_ext, nq(20)
-//
-// // Classify leaseholds by x-tile
-// gen lease_duration_at_trans_no_ext = lease_duration_at_trans
-// replace lease_duration_at_trans_no_ext = .  if lease_was_extended
-//
-// gen L_lease_duration_at_trans_no_ext = L_lease_duration_at_trans
-// replace L_lease_duration_at_trans_no_ext = .  if lease_was_extended
-//
-// xtile bucket_3_sale_no_ext = lease_duration_at_trans_no_ext, nq(2) 
-// replace bucket_3_sale_no_ext = 3 if !leasehold 
-//
-// xtile bucket_3_purchase_no_ext = L_lease_duration_at_trans_no_ext, nq(2)
-// replace bucket_3_purchase_no_ext = 3 if !leasehold
-//
-// xtile bucket_6_sale_no_ext = lease_duration_at_trans_no_ext, nq(5)
-// replace bucket_6_sale_no_ext = 6 if !leasehold
-//
-// xtile bucket_6_purchase_no_ext = L_lease_duration_at_trans_no_ext, nq(5)
-// replace bucket_6_purchase_no_ext = 6 if !leasehold
+// (2) Drop data with extensions
+drop if lease_was_extended
+drop price_quintile price_ventile bucket_*
+
+// Generate x_tiles of purchase price 
+xtile price_quintile = L_price, nq(5) 
+xtile price_ventile = L_price, nq(20)
+
+// Classify leaseholds by x-tile
+xtile bucket_3_sale = lease_duration_at_trans, nq(2)
+replace bucket_3_sale = 3 if !leasehold
+
+xtile bucket_6_sale = lease_duration_at_trans, nq(5)
+replace bucket_6_sale = 6 if !leasehold
+
+xtile bucket_11_sale = lease_duration_at_trans, nq(10)
+replace bucket_11_sale = 11 if !leasehold
 
 // Classify data into five year periods (based on purchase data, sale date, and halfway point)
 gen purchase = L_date_trans
