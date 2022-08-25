@@ -13,7 +13,10 @@ use "$WORKING/full_merged_data.dta", clear
 // Calculate information about lease term at each date
 // Record lease term at time of transactions
 gen years_elapsed_at_trans = date_trans - date_registered
-gen lease_duration_at_trans = number_years - years_elapsed_at_transaction
+gen lease_duration_at_trans = number_years - years_elapsed_at_trans
+
+// Drop if remaining lease duration is zero or negative
+drop if lease_duration_at_trans <= 0
 	
 // Leasehold indicator
 gen leasehold = (duration == "L")
@@ -23,10 +26,14 @@ gen pos_empty   = strpos(postcode," ")
 gen location      = substr(postcode,1,pos_empty)
 replace location  = trim(location)
 drop pos_empty
+drop if missing(location)
 
 // Make string factor variables numeric
 egen location_n = group(location)
 egen type_n = group(type)
+
+// Gen log price 
+gen log_price = log(price)
 
 // Merge with interest rate data
 cap drop _merge
@@ -36,6 +43,8 @@ drop _merge
 
 xtile bucket_3 = lease_duration_at_trans, nq(2)
 replace bucket_3 = 3 if !leasehold
+
+xtile price_quintile = price, nq(5)
 
 save "$OUTPUT/full_cleaned_data.dta", replace
 

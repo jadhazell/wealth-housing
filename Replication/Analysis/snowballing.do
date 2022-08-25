@@ -56,9 +56,49 @@ foreach rate_var of varlist interest_rate L_interest_rate med_interest_rate {
 		varlabels(2.`bucket_name'#c.d_interest_rate "\multirow{2}{4cm}{High Duration Leasehold x $\Delta$ Rate}" ///
 				  3.`bucket_name'#c.d_interest_rate "\multirow{2}{4cm}{Freehold x $\Delta$ Rate}" ///
 				  2.`bucket_name'#c.d_interest_rate#c.`rate_var' "\multirow{2}{4.5cm}{High Duration Leasehold x $\Delta$ Rate x `interest_rate_label'}" ///
-				  3.`bucket_name'#c.d_interest_rate#c.`rate_var' "\multirow{2}{4cm}{Freehold x $\Delta$ Rate x `interest_rate_label'}") ///
+				  3.`bucket_name'#c.d_interest_rate#c.`rate_var' "\multirow{2}{4.5cm}{Freehold x $\Delta$ Rate x `interest_rate_label'}") ///
 		gaps replace
 }
+
+// Narrow in on first regression with sale interest rate interaction
+reghdfe d_log_price i.bucket_3_sale##c.d_interest_rate##c.interest_rate, absorb(i.location_n##i.date_trans##i.L_date_trans) cluster(date_trans L_date_trans location_n)
+sum interest_rate
+global h_rate = r(mean)+r(sd)
+global l_rate = r(mean)-r(sd)
+
+sum d_interest_rate
+global h_d_rate = r(mean)+r(sd)
+global l_d_rate = r(mean)-r(sd)
+
+margins, at(bucket_3_sale=(1 2 3) interest_rate=($h_rate $l_rate ) d_interest_rate=($h_d_rate $l_d_rate )) vsquish
+marginsplot, recast(line) noci xlabel(1 "Low Duration" 2 "High Duration" 3 "Freehold") xtitle(" ") legend(order(1 "Low Rate Level & Large Rate Drop" 2 "Low Rate Level & Small Rate Drop" 3 "High Rate Level & Large Rate Drop" 4 "High Rate Level & Small Rate Drop"))
+graph export "$RESULTS/linear_predictions_sale.png", replace
+
+
+margins bucket_3_sale, at(d_interest_rate=($h_d_rate $l_d_rate) interest_rate=($h_rate $l_rate)
+marginsplot, by(bucket_3_sale)
+graph export "$RESULTS/linear_predictions_by_duration_sale.png", replace
+
+// Narrow in on first regression with purchase interest rate interaction
+reghdfe d_log_price i.bucket_3_sale##c.d_interest_rate##c.L_interest_rate, absorb(i.location_n##i.date_trans##i.L_date_trans) cluster(date_trans L_date_trans location_n)
+sum interest_rate
+global h_rate = r(mean)+r(sd)
+global l_rate = r(mean)-r(sd)
+
+sum d_interest_rate
+global h_d_rate = r(mean)+r(sd)
+global l_d_rate = r(mean)-r(sd)
+
+margins, at(bucket_3_sale=(1 2 3) L_interest_rate=($h_rate $l_rate ) d_interest_rate=($h_d_rate $l_d_rate )) vsquish
+marginsplot, recast(line) xlabel(1 "Low Duration" 2 "High Duration" 3 "Freehold") xtitle(" ") legend(order(1 "Low Rate Level & Large Rate Drop" 2 "Low Rate Level & Small Rate Drop" 3 "High Rate Level & Large Rate Drop" 4 "High Rate Level & Small Rate Drop"))
+graph export "$RESULTS/linear_predictions_purchase.png", replace
+
+
+margins bucket_3_sale, at(d_interest_rate=($h_d_rate $l_d_rate) interest_rate=($h_rate $l_rate)
+marginsplot, by(bucket_3_sale)
+graph export "$RESULTS/linear_predictions_by_duration_purchase.png", replace
+
+// Plot marginal effect 
 
 //////////////////////////////////////////////////////////
 // Regress on particular year blocks
