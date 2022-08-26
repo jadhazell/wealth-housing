@@ -15,11 +15,33 @@ use "$WORKING/full_merged_data.dta", clear
 gen years_elapsed_at_trans = date_trans - date_registered
 gen lease_duration_at_trans = number_years - years_elapsed_at_trans
 
-// Drop if remaining lease duration is zero or negative
-drop if lease_duration_at_trans <= 0
-	
 // Leasehold indicator
 gen leasehold = (duration == "L")
+
+////////////////////////////////////////////
+// Drop missing data
+////////////////////////////////////////////
+
+// Drop leaseholds with no lease length information 
+drop if leasehold & missing(date_registered)
+
+// Drop if property changes from leasehold to freehold at some point
+duplicates tag property_id, gen(dup_pid)
+duplicates tag property_id duration, gen(dup_pid_dur)
+
+gen no_match = dup_pid != dup_pid_dur
+egen switches_duration = total(no_match), by(property_id)
+
+drop if switches_duration
+
+drop dup* switches_duration no_match
+
+// Drop if remaining lease duration is zero or negative
+drop if lease_duration_at_trans <= 0
+
+////////////////////////////////////////////
+// Generate more useful variables
+////////////////////////////////////////////
 
 // Isolate first component of postcode
 gen pos_empty   = strpos(postcode," ")
@@ -41,44 +63,28 @@ merge m:1 year quarter using "$WORKING/interest_rates.dta"
 keep if _merge==3
 drop _merge
 
-xtile bucket_3 = lease_duration_at_trans, nq(2)
-replace bucket_3 = 3 if !leasehold
-
-xtile price_quintile = price, nq(5)
-
 save "$OUTPUT/full_cleaned_data.dta", replace
 
 ////////////////////////////////////////////////////////////////////////////
 // We are primarily interested in the change in price between transactions
 // Generate logs of variables and collapse observations by date purchase/date sale
 ////////////////////////////////////////////////////////////////////////////
+use "$OUTPUT/full_cleaned_data.dta", clear
 
 //Generate lagged variables
 sort property_id date_trans
 by property_id: gen L_date_trans = date_trans[_n-1]
 by property_id: gen L_price = price[_n-1]
 by property_id: gen L_interest_rate = interest_rate[_n-1]
-by property_id: gen L_years_elapsed_at_transaction = years_elapsed_at_transaction[_n-1]
-by property_id: gen L_lease_duration_at_transaction = lease_duration_at_transaction[_n-1]
+by property_id: gen L_years_elapsed_at_trans = years_elapsed_at_trans[_n-1]
+by property_id: gen L_lease_duration_at_trans = lease_duration_at_trans[_n-1]
 by property_id: gen L_date_registered = date_registered[_n-1]
 by property_id: gen L_number_years = number_years[_n-1]
 
 // Keep only observations that record change over time (this will delete all properties for which we only have on observation)
 drop if missing(L_date_trans)
-drop if leasehold & missing(date_registered)
 
-// We are also interested in restricting the sample bassed on:
-	// (1) Observations for which the purchase does not have lease information
-	// (2) Observations for which the lease is extended half way through the ownership
-
-// (1) Tag data for which the purchase does not have lease information
-gen has_purchase_lease = 1
-replace has_purchase_lease = 0 if leasehold & missing(L_date_registered)
-
-// For now, drop observations for which we do not have purchase lease information
-drop if !has_purchase_lease
-
-// (2) Tag data for which the lease was extended half way through the ownership
+// Tag data for which the lease was extended half way through the ownership
 gen lease_was_extended = 0
 replace lease_was_extended = 1 if leasehold & has_purchase_lease & date_registered != L_date_registered
 
@@ -118,6 +124,7 @@ save "$OUTPUT/final_data_with_extensions.dta", replace
 // (2) Drop data with extensions
 drop if lease_was_extended
 drop price_quintile price_ventile bucket_*
+count
 
 // Generate x_tiles of purchase price 
 xtile price_quintile = L_price, nq(5) 
@@ -145,5 +152,7 @@ foreach var of varlist purchase half_way sale {
 	replace year_bucket_`var' = "2015-2020" if `var' >= 2015 & `var' < 2020
 	replace year_bucket_`var' = "2020+" if `var' >= 2020
 }
+
+count
 
 save "$OUTPUT/final_data.dta", replace
