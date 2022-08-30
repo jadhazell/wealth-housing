@@ -38,7 +38,6 @@ estpost tabstat diff, by(ext_bucket) statistics(mean n) columns(statistics) list
 esttab using "$RESULTS/difference_by_difference.tex", cells("mean count") aux(sd) nostar unstack label noobs nonote title("Mean Difference (Sale Registration Date - Purchase Registration Date) by Difference Quintiles \label{tab: summary diff}") collabels("Mean" "Count") varlabels(1 "First Quintile" 2 "Second Quintile" 3 "Third Qunitile" 4 "Fourth Quintile" 5 "Fifth Quintile") replace
 
 // Generate histogram of lease extension amount
-gen L_number_years = (L_date_trans - L_date_registered) + L_lease_duration_at_trans
 gen number_years_before_renewal = L_number_years - (date_registered - L_date_registered)
 gen extension_amt = number_years - number_years_before_renewal
 twoway histogram extension_amt if lease_was_extended

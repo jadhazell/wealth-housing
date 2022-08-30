@@ -10,7 +10,7 @@ from utilities import *
 def identify_and_write_matches(data_directory, divided_data_directory, division_level="postcode", verbose=False):
 	new_matches = [["merge_key","property_id"]]
 
-	print("Starting search...")
+	print("Starting search... :)")
 	for i, area in enumerate(tqdm(sorted(os.listdir(divided_data_directory)))):
 		
 		area_directory = os.path.join(divided_data_directory, area)
@@ -58,7 +58,7 @@ def identify_and_write_matches(data_directory, divided_data_directory, division_
 							print(f"Price data point:{prop2.address}\n")
 							# print(f"{prop2.split_address()}\n")
 
-						match_key = prop1_not_cleaned.replace(".","").replace("'","").replace(" ", "")
+						match_key = prop1_not_cleaned.replace(".","").replace("'","").replace(",", "")
 						new_matches.append([match_key, prop2.property_id])
 
 	print("Number of matches:", len(new_matches))

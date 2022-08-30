@@ -4,64 +4,61 @@ global WORKING "`2'"
 di "Data folder: $DATA"
 di "Working folder: $WORKING"
 
-// import delimited "$DATA/pp-complete.txt", clear
-//
-// rename v1  unique_id
-// rename v2  price
-// rename v3  date
-// rename v4  postcode
-// rename v5  type
-// rename v6  new
-// rename v7  duration
-// rename v8  street_number
-// rename v9  flat_number
-// rename v10 street
-// rename v11 locality
-// rename v12 city
-// rename v13 district
-// rename v14 county
-// rename v15 record_status
-//
-// // Clean date + aggregate at quarter level
-// replace date = substr(date,1,7)
-// gen date_trans = date(date,"YM")
-// gen  year = year(date_trans)
-// gen quarter = quarter(date_trans)
-// gen date_trans2 = year + (quarter-1)/4
-// drop date_trans
-// rename date_trans2 date_trans
-//
-// // Clean address variables
-// foreach var of varlist postcode street_number flat_number street locality city district county {
-// 	replace `var' = subinstr(`var',".","",.)
-// // 	replace `var' = subinstr(`var',",","",.)
-// 	replace `var' = subinstr(`var',"'","",.)
-// 	replace `var' = subinstr(`var'," - ","-",.)
-// 	replace `var' = upper(strtrim(stritrim(`var')))
-// }
-//
-// // Drop missing values
-// drop if missing(street_number) & missing(flat_number)
-//
-// // Generate property id
-// egen property_id = concat(flat_number street_number postcode), punct(" ")
-// replace property_id = strtrim(stritrim(property_id))
-//
-// // Create special property id if missing postcode
-// egen property_id_mp = concat(flat_number street_number street locality city), punct(" ") 
-// egen property_id_mp2 = concat(flat_number street_number street city), punct(" ")	
-// replace property_id_mp = property_id_mp2 if locality == city
-// replace property_id_mp = strtrim(stritrim(property_id_mp))
-// replace property_id = property_id_mp if missing(postcode)
-//
-// // Remove commas from property_id
-// replace property_id = subinstr(property_id, "," , "", .)
-//
-// // Drop if unknown property duration
-// drop if duration == "U"
-//
-// compress
-// save "$WORKING/pp-complete.dta", replace
+import delimited "$DATA/pp-complete.txt", clear
+
+rename v1  unique_id
+rename v2  price
+rename v3  date
+rename v4  postcode
+rename v5  type
+rename v6  new
+rename v7  duration
+rename v8  street_number
+rename v9  flat_number
+rename v10 street
+rename v11 locality
+rename v12 city
+rename v13 district
+rename v14 county
+rename v15 record_status
+
+// Clean date + aggregate at quarter level
+replace date = substr(date,1,7)
+gen date_trans = date(date,"YM")
+gen  year = year(date_trans)
+gen quarter = quarter(date_trans)
+gen date_trans2 = year + (quarter-1)/4
+drop date_trans
+rename date_trans2 date_trans
+
+// Clean address variables
+foreach var of varlist postcode street_number flat_number street locality city district county {
+	replace `var' = subinstr(`var',".","",.)
+	replace `var' = subinstr(`var',",","",.)
+	replace `var' = subinstr(`var',"'","",.)
+	replace `var' = subinstr(`var'," - ","-",.)
+	replace `var' = upper(strtrim(stritrim(`var')))
+}
+
+// Drop missing values
+drop if missing(street_number) & missing(flat_number)
+
+// Generate property id
+egen property_id = concat(flat_number street_number postcode), punct(" ")
+replace property_id = strtrim(stritrim(property_id))
+
+// Create special property id if missing postcode
+egen property_id_mp = concat(flat_number street_number street locality city), punct(" ") 
+egen property_id_mp2 = concat(flat_number street_number street city), punct(" ")	
+replace property_id_mp = property_id_mp2 if locality == city
+replace property_id_mp = strtrim(stritrim(property_id_mp))
+replace property_id = property_id_mp if missing(postcode)
+
+// Drop if unknown property duration
+drop if duration == "U"
+
+compress
+save "$WORKING/pp-complete.dta", replace
 use "$WORKING/pp-complete.dta", clear
 
 // Combine property ids that should belong to the same property:
@@ -129,16 +126,16 @@ restore
 drop if postcode == ""
 
 // Create merge keys
-egen merge_key_1 = concat(flat_number street_number street city postcode), punct(",")
+egen merge_key_1 = concat(flat_number street_number street city postcode), punct(" ")
 replace merge_key_1 = upper(strtrim(stritrim(merge_key_1)))
 
-egen merge_key_2 = concat(flat_number street_number street locality city postcode), punct(",")
+egen merge_key_2 = concat(flat_number street_number street locality city postcode), punct(" ")
 replace merge_key_2 = upper(strtrim(stritrim(merge_key_2)))	
 replace merge_key_2 = "" if locality==city | merge_key_1==merge_key_2
 
-// Remove spaces
-replace merge_key_1 = subinstr(merge_key_1," ","",.)
-replace merge_key_2 = subinstr(merge_key_2," ","",.)
+// // Remove spaces
+// replace merge_key_1 = subinstr(merge_key_1," ","",.)
+// replace merge_key_2 = subinstr(merge_key_2," ","",.)
 
 save "$WORKING/cleaned_price_data_leaseholds.dta", replace
 

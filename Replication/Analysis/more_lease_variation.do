@@ -1,6 +1,13 @@
 local differenced = `1'
 local restricted = `2'
 local logs = `3'
+local duplicate_registration = `4'
+local flats = `5'
+local windsor = `6'
+local under_80 = `7'
+local post_2004 = `8'
+local below_median_price = `9'
+local above_median_price = `10'
 
 global INPUT "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_VBP/Cleaning/Output"
 global RESULTS "/Users/vbp/Dropbox (Princeton)/Apps/Overleaf/More Lease Variation"
@@ -9,7 +16,7 @@ global TABLES "$RESULTS/Tables"
 global FIGURES "$RESULTS/Figures"
 
 // Select correct sample according to parameters
-do select_sample `differenced' `restricted' `logs'
+do select_sample `differenced' `restricted' `logs' `duplicate_registration' `flats' `windsor' `under_80' `post_2004' `below_median_price' `above_median_price'
 
 di "Fixed effects:"
 di $fes
@@ -30,6 +37,7 @@ foreach fe of global fes  {
 	di "$tag"
 	
 	// Skip lasted column of main table because it takes too long
+	
 	if `count'==4 {
 		continue
 	}
@@ -104,37 +112,47 @@ foreach fe of global fes  {
 	// Split data into more specific blocks
 	/////////////////////////////////////////////////////
 
-
-	// 1
+	// GMS split
 	cap drop bucket 
-	gen bucket = 1 if leasehold & lease_duration_at_trans > 0 & lease_duration_at_trans <= 100
-	replace bucket = 2 if leasehold & lease_duration_at_trans > 100 & lease_duration_at_trans <= 500
-	replace bucket = 3 if leasehold & lease_duration_at_trans > 500 & lease_duration_at_trans <= 1000
-	replace bucket = 4 if (leasehold & lease_duration_at_trans > 1000) | !leasehold
+	gen bucket     = 1 if leasehold & lease_duration_at_trans >= 80 < 100
+	replace bucket = 2 if leasehold & lease_duration_at_trans >= 100 & lease_duration_at_trans < 125
+	replace bucket = 3 if leasehold & lease_duration_at_trans >= 125 & lease_duration_at_trans < 150
+	replace bucket = 4 if leasehold & lease_duration_at_trans >= 150 & lease_duration_at_trans <= 300
+	replace bucket = 5 if leasehold & lease_duration_at_trans >= 700
+	replace bucket = 6 if !leasehold
+
+	// Summary stats
+	eststo clear
+	estpost tabstat lease_duration_at_trans $dep_var $indep_var, by(bucket) statistics(mean sd) columns(statistics) listwise
+	esttab using "$TABLES/summary_gmsbucket_$tag.tex", main(mean) aux(sd) nonumber nostar unstack label noobs nonote title("Stats By Year of Purchase \label{tab: summary gms fe`count'_$tag}") varlabels(1 "80-100" 2 "100-125" 3 "125-150" 4 "150-300" 5 "700-1000") replace substitute(\_ _)
 
 	local bucket_name bucket
-
+	
 	eststo clear 
 	eststo: reghdfe $dep_var i.`bucket_name'##c.$indep_var if obs_to_use`count', absorb(`fe') cluster($cluster)
 
-	esttab using "$TABLES/results_by_bucket1_fe`count'_$tag.tex", ///
-		se title("Regression Results by 100 Year Lease Duration Blocks \label{tab: regression 100 year blocks fe`count'_$tag}") ///
+	esttab using "$TABLES/results_gmsbucket_fe`count'_$tag.tex", ///
+		se title("Regression Results \label{tab: gms fe`count'_$tag}") ///
 		keep(2.`bucket_name'#c.$indep_var ///
 		3.`bucket_name'#c.$indep_var ///
-		4.`bucket_name'#c.$indep_var) ///
+		4.`bucket_name'#c.$indep_var ///
+		5.`bucket_name'#c.$indep_var ///
+		6.`bucket_name'#c.$indep_var) ///
 		varlabels( ///
-		2.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{100-500 Years x }" ///
-		3.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{500-1000 Years x `interest_rate_label'}" ///
-		4.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{1000+ and Freehoolds x `interest_rate_label'}") ///
+		2.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{100-125 Years x $indep_var_label}" ///
+		3.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{125-150 Years x $indep_var_label}" ///
+		4.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{150-300 Years x $indep_var_label}" ///
+		5.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{700-1000 Years x $indep_var_label}" ///
+		6.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{Freehoolds x $indep_var_label}") ///
 		gaps replace substitute(\_ _)
 
 	cap drop xaxis coeff sd ub lb
-	gen xaxis = _n if _n > 1 & _n <= 4
+	gen xaxis = _n if _n > 1 & _n <= 6
 	gen coeff = .
 	gen sd = .
 
 	local bucket_name bucket
-	forvalues n = 2/4 {
+	forvalues n = 2/6 {
 		replace coeff = _b[`n'.`bucket_name'#c.$indep_var] if _n == `n'
 		replace sd = _se[`n'.`bucket_name'#c.$indep_var] if _n == `n'
 	}
@@ -142,107 +160,50 @@ foreach fe of global fes  {
 	gen lb = coeff - 1.96*sd
 	gen ub = coeff + 1.96*sd
 
-	twoway (rarea ub lb xaxis) (line coeff xaxis), xlabel(2 "100-500" 3 "500-1000" 4 "1000+ & Freehold", angle(45)) yline(0)
-	graph export "$FIGURES/results_by_bucket1_fe`count'_$tag.png", replace
+	twoway (rarea ub lb xaxis) (line coeff xaxis), xlabel(2 "100-125" 3 "125-150" 4 "150-300" 5 "700-1000" 6 "Freehold", angle(45)) yline(0)
+	graph export "$FIGURES/results_gmsbucket_fe`count'_$tag.png", replace
 
-	// Focus on long leases
+	// Tighter split (i.e. smaller buckets)
 	cap drop bucket 
-	gen bucket = 1 if leasehold & lease_duration_at_trans > 0 & lease_duration_at_trans <= 100
-	replace bucket = 2 if leasehold & lease_duration_at_trans > 100 & lease_duration_at_trans <= 200
-	replace bucket = 3 if leasehold & lease_duration_at_trans > 200 & lease_duration_at_trans <= 900
-	replace bucket = 4 if leasehold & lease_duration_at_trans > 900 & lease_duration_at_trans <= 970
-	replace bucket = 5 if leasehold & lease_duration_at_trans > 970 & lease_duration_at_trans <= 980
-	replace bucket = 6 if leasehold & lease_duration_at_trans > 980 & lease_duration_at_trans <= 990
-	replace bucket = 7 if leasehold & lease_duration_at_trans > 990 & lease_duration_at_trans <= 1000
-	replace bucket = 8 if (leasehold & lease_duration_at_trans > 1000) | !leasehold
+	gen bucket     = 1 if leasehold & lease_duration_at_trans >= 80 < 100
+	replace bucket = 2 if leasehold & lease_duration_at_trans >= 100 & lease_duration_at_trans < 125
+	replace bucket = 3 if leasehold & lease_duration_at_trans >= 125 & lease_duration_at_trans < 150
+	replace bucket = 4 if leasehold & lease_duration_at_trans >= 150 & lease_duration_at_trans <= 300
+	replace bucket = 5 if leasehold & lease_duration_at_trans >= 700 & lease_duration_at_trans < 900
+	replace bucket = 6 if leasehold & lease_duration_at_trans >= 900 & lease_duration_at_trans < 950
+	replace bucket = 7 if leasehold & lease_duration_at_trans >= 950 & lease_duration_at_trans < 975
+	replace bucket = 8 if leasehold & lease_duration_at_trans >= 975 & lease_duration_at_trans < 1000
+	replace bucket = 9 if !leasehold
 
 	// Summary stats
 	eststo clear
 	estpost tabstat lease_duration_at_trans $dep_var $indep_var, by(bucket) statistics(mean sd) columns(statistics) listwise
-	esttab using "$TABLES/summary_long_leases_$tag.tex", main(mean) aux(sd) nonumber nostar unstack label noobs nonote title("Stats By Year of Purchase \label{tab: summary focus on long leases $tag}") varlabels(1 "0-100" 2 "100-200" 3 "200-900" 4 "900-970" 5 " 970-980" 6 "980-990" 7 "990-1000" 8 "1000+") replace substitute(\_ _)
+	esttab using "$TABLES/summary_expanded_bucket_$tag.tex", main(mean) aux(sd) nonumber nostar unstack label noobs nonote title("Stats By Year of Purchase \label{tab: summary expanded fe`count'_$tag}") varlabels(1 "80-100" 2 "100-125" 3 "125-150" 4 "150-300" 5 "700-900" 6 "900-950" 7 "950-975" 8 "975-1000" 9 "1000+") replace substitute(\_ _)
 
 	local bucket_name bucket
-
+	
 	eststo clear 
 	eststo: reghdfe $dep_var i.`bucket_name'##c.$indep_var if obs_to_use`count', absorb(`fe') cluster($cluster)
 
-	esttab using "$TABLES/results_long_leases_fe`count'_$tag.tex", ///
-		se title("Regression Results, Focusing on Long Leases \label{tab: regression focus on long leases fe`count'_$tag}") ///
+	esttab using "$TABLES/results_expanded_bucket_fe`count'_$tag.tex", ///
+		se title("Regression Results \label{tab: regression expanded fe`count'_$tag}") ///
 		keep(2.`bucket_name'#c.$indep_var ///
 		3.`bucket_name'#c.$indep_var ///
 		4.`bucket_name'#c.$indep_var ///
 		5.`bucket_name'#c.$indep_var ///
 		6.`bucket_name'#c.$indep_var ///
 		7.`bucket_name'#c.$indep_var ///
-		8.`bucket_name'#c.$indep_var) ///
+		8.`bucket_name'#c.$indep_var ///
+		9.`bucket_name'#c.$indep_var) ///
 		varlabels( ///
-		2.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{100-200 Years x $indep_var_label}" ///
-		3.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{200-900 Years x $indep_var_label}" ///
-		4.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{900-950 Years x $indep_var_label}" ///
-		5.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{950-970 Years x $indep_var_label}" ///
-		6.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{970-990 Years x $indep_var_label}" ///
-		7.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{990-1000 Years x $indep_var_label}" ///
-		8.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{1000+ and Freehoolds x $indep_var_label}") ///
-		gaps replace substitute(\_ _)
-
-	cap drop xaxis coeff sd ub lb
-	gen xaxis = _n if _n > 1 & _n <= 8
-	gen coeff = .
-	gen sd = .
-
-	local bucket_name bucket
-	forvalues n = 2/8 {
-		replace coeff = _b[`n'.`bucket_name'#c.$indep_var] if _n == `n'
-		replace sd = _se[`n'.`bucket_name'#c.$indep_var] if _n == `n'
-	}
-
-	gen lb = coeff - 1.96*sd
-	gen ub = coeff + 1.96*sd
-
-	twoway (rarea ub lb xaxis) (line coeff xaxis), xlabel(2 "100-200" 3 "200-900" 4 "900-970" 5 " 970-980" 6 "980-990" 7 "990-1000" 8 "1000+ & Freehold", angle(45)) yline(0)
-	graph export "$FIGURES/results_long_leases_fe`count'_$tag.png", replace
-
-
-	// Focus on short leases
-	cap drop bucket 
-	gen bucket = 1 if leasehold & lease_duration_at_trans > 0 & lease_duration_at_trans <= 70
-	replace bucket = 2 if leasehold & lease_duration_at_trans > 70 & lease_duration_at_trans <= 80
-	replace bucket = 3 if leasehold & lease_duration_at_trans > 80 & lease_duration_at_trans <= 90
-	replace bucket = 4 if leasehold & lease_duration_at_trans > 90 & lease_duration_at_trans <= 100
-	replace bucket = 5 if leasehold & lease_duration_at_trans > 100 & lease_duration_at_trans <= 110
-	replace bucket = 6 if leasehold & lease_duration_at_trans > 110 & lease_duration_at_trans <= 120
-	replace bucket = 7 if leasehold & lease_duration_at_trans > 120 & lease_duration_at_trans <= 150
-	replace bucket = 8 if leasehold & lease_duration_at_trans > 150 & lease_duration_at_trans <= 1000
-	replace bucket = 9 if (leasehold & lease_duration_at_trans > 1000) | !leasehold
-
-	// Summary stats
-	eststo clear
-	estpost tabstat lease_duration_at_trans $dep_var $indep_var, by(bucket) statistics(mean sd) columns(statistics) listwise
-	esttab using "$TABLES/summary_short_leases.tex", main(mean) aux(sd) nonumber nostar unstack label noobs nonote title("Stats By Year of Purchase \label{tab: summary focus on short leases fe`count'_$tag}") varlabels(1 "0-70" 2 "70-80" 3 "80-90" 4 "90-100" 5 " 100-110" 6 "110-120" 7 "120-150" 8 "150-1000" 9 "1000+") replace substitute(\_ _)
-
-	local bucket_name bucket
-
-	eststo clear 
-	eststo: reghdfe $dep_var i.`bucket_name'##c.$indep_var if obs_to_use`count', absorb(`fe') cluster($cluster)
-
-	esttab using "$TABLES/results_short_leases_fe`count'_$tag.tex", ///
-		se title("Regression Results, Focusing on Short Leases \label{tab: regression focus on short leases fe`count'_$tag}") ///
-		keep(2.`bucket_name'#c.$indep_var ///
-		3.`bucket_name'#c.$indep_var ///
-		4.`bucket_name'#c.$indep_var ///
-		5.`bucket_name'#c.$indep_var ///
-		6.`bucket_name'#c.$indep_var ///
-		7.`bucket_name'#c.$indep_var ///
-		8.`bucket_name'#c.$indep_var) ///
-		varlabels( ///
-		2.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{70-80 Years x $indep_var_label}" ///
-		3.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{80-90 Years x $indep_var_label}" ///
-		4.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{90-100 Years x $indep_var_label}" ///
-		5.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{100-110 Years x $indep_var_label}" ///
-		6.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{110-120 Years x $indep_var_label}" ///
-		7.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{120-150 Years x $indep_var_label}" ///
-		8.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{150-1000 x $indep_var_label}" ///
-		9.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{1000+ and Freehoolds x $indep_var_label}") ///
+		2.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{100-125 Years x $indep_var_label}" ///
+		3.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{125-150 Years x $indep_var_label}" ///
+		4.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{150-300 Years x $indep_var_label}" ///
+		5.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{700-900 Years x $indep_var_label}" ///
+		6.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{900-950 Years x $indep_var_label}" ///
+		7.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{950-975 Years x $indep_var_label}" ///
+		8.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{975-1000 Years x $indep_var_label}" ///
+		9.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{Freehoolds x $indep_var_label}") ///
 		gaps replace substitute(\_ _)
 
 	cap drop xaxis coeff sd ub lb
@@ -259,9 +220,10 @@ foreach fe of global fes  {
 	gen lb = coeff - 1.96*sd
 	gen ub = coeff + 1.96*sd
 
-	twoway (rarea ub lb xaxis) (line coeff xaxis), xlabel(2 "70-80" 3 "80-90" 4 "90-100" 5 " 100-110" 6 "110-120" 7 "120-150" 8 "150-1000" 9 "1000+ & Freehold", angle(45)) yline(0)
-	graph export "$FIGURES/results_short_leases_fe`count'_$tag.png", replace
+	twoway (rarea ub lb xaxis) (line coeff xaxis), xlabel(2 "100-125" 3 "125-150" 4 "150-300" 5 "700-900" 6 "900-950" 7 "950-975" 8 "975-1000" 9 "Freehold", angle(45)) yline(0)
+	graph export "$FIGURES/results_expanded_bucket_fe`count'_$tag.png", replace
 
+	
 	/////////////////////////////////////////////////////
 	// Split Data by Deciles:
 	/////////////////////////////////////////////////////

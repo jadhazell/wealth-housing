@@ -54,8 +54,15 @@ drop if missing(location)
 egen location_n = group(location)
 egen type_n = group(type)
 
+// Winsorize price
+winsor price, p(0.01) gen(price_win)
+
 // Gen log price 
 gen log_price = log(price)
+gen log_price_win = log(price_win)
+
+// Get lease duration centiles
+xtile duration_centiles = lease_duration_at_trans, nq(100)
 
 // Merge with interest rate data
 cap drop _merge
@@ -75,22 +82,30 @@ use "$OUTPUT/full_cleaned_data.dta", clear
 sort property_id date_trans
 by property_id: gen L_date_trans = date_trans[_n-1]
 by property_id: gen L_price = price[_n-1]
+by property_id: gen L_price_win = price_win[_n-1]
 by property_id: gen L_interest_rate = interest_rate[_n-1]
 by property_id: gen L_years_elapsed_at_trans = years_elapsed_at_trans[_n-1]
 by property_id: gen L_lease_duration_at_trans = lease_duration_at_trans[_n-1]
 by property_id: gen L_date_registered = date_registered[_n-1]
 by property_id: gen L_number_years = number_years[_n-1]
+by property_id: gen L_number_years_missing = number_years_missing[_n-1]
+by property_id: gen L_number_years_partial_missing = number_years_partial_missing[_n-1]
+
+save "$OUTPUT/full_cleaned_data_with_lags.dta", replace
 
 // Keep only observations that record change over time (this will delete all properties for which we only have on observation)
 drop if missing(L_date_trans)
 
 // Tag data for which the lease was extended half way through the ownership
 gen lease_was_extended = 0
-replace lease_was_extended = 1 if leasehold & has_purchase_lease & date_registered != L_date_registered
+replace lease_was_extended = 1 if leasehold & date_registered != L_date_registered
 
 // Generate differenced variables
 gen d_price = price - L_price
 gen d_log_price = 100*(log(price) - log(L_price))
+
+gen d_price_win = price_win - L_price_win
+gen d_log_price_win = 100*(log(price_win) - log(L_price_win))
 
 gen d_interest_rate = interest_rate - L_interest_rate
 gen d_log_interest_rate = log(interest_rate) - log(L_interest_rate)

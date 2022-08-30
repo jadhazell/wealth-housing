@@ -9,6 +9,7 @@ di "Working folder: $WORKING"
 use "$WORKING/merged_data_with_postcodes", clear
 append using "$WORKING/merged_data_without_postcodes"
 drop if missing(date_trans)
+keep if _merge == 3
 
 di "Number of merged observations:"
 di _N
@@ -24,23 +25,6 @@ save "$WORKING/merged_data.dta", replace
 
 sort property_id date_trans date_registered
 drop v16 unique_id merge_key* merge_num property_id_* dup* date
-
-////////////////////////////////////////////
-// Aggregate at quarter level
-////////////////////////////////////////////
-
-gen  year          = year(date_trans)
-gen quarter = quarter(date_trans)
-
-gen date_trans2 = year + (quarter-1)/4
-drop date_trans
-rename date_trans2 date_trans
-
-gen quarter_registered = quarter(date_registered)
-gen year_registered = year(date_registered)
-gen date_registered2 = year_registered + (quarter_registered-1)/4
-drop date_registered quarter_registered year_registered
-rename date_registered2 date_registered
 duplicates drop property_id date_trans date_registered, force
 
 // We want to keep the registration date that most closely precedes each transaction

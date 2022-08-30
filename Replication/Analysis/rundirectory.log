@@ -1,0 +1,3461 @@
+
+  ___  ____  ____  ____  ____ ©
+ /__    /   ____/   /   ____/      17.0
+___/   /   /___/   /   /___/       MP—Parallel Edition
+
+ Statistics and Data Science       Copyright 1985-2021 StataCorp LLC
+                                   StataCorp
+                                   4905 Lakeway Drive
+                                   College Station, Texas 77845 USA
+                                   800-STATA-PC        https://www.stata.com
+                                   979-696-4600        stata@stata.com
+
+Stata license: Single-user 2-core , expiring 29 Jul 2023
+Serial number: 501709222714
+  Licensed to: affliate
+               Princeton University
+
+Notes:
+      1. Stata is running in batch mode.
+      2. Unicode is supported; see help unicode_advice.
+      3. More than 2 billion observations are allowed; see help obs_advice.
+      4. Maximum number of variables is set to 5,000; see help set_maxvar.
+
+. do rundirectory.do "" "" 
+
+. cd "/Users/vbp/Dropbox (Personal)/Mac/Documents/Princeton/wealth-housing/Repl
+> ication/Analysis"
+/Users/vbp/Dropbox (Personal)/Mac/Documents/Princeton/wealth-housing/Replicatio
+> n/Analysis
+
+. 
+. // Parameter 1: Differenced (vs. levels)
+. // Parameter 2: Restricted (to sample from differenced)
+. // Parameter 3: Use logs (only applies to levels)
+. // Parameter 4: Set properties with duplicate lease durations as missing inst
+> ead of using mean durations
+. // Parameter 5: Use only flats
+. do main_regression 1 0 0 0 0
+
+. local differenced = `1'
+
+. local restricted = `2'
+
+. local logs = `3'
+
+. local duplicate_registration = `4'
+
+. local flats = `5'
+
+. 
+. global INPUT "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_
+> VBP/Cleaning/Output"
+
+. global RESULTS "/Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Main Regression"
+
+. global TABLES "$RESULTS/Tables"
+
+. global FIGURES "$RESULTS/Figures"
+
+. 
+. // Select correct sample according to parameters
+. do select_sample `differenced' `restricted' `logs' `duplicate_registration' `
+> flats'
+
+. local differenced = `1'
+
+. local restricted = `2'
+
+. local logs = `3'
+
+. local duplicate_registration = `4'
+
+. local flats = `5'
+
+. 
+. di "differenced = `differenced'"
+differenced = 1
+
+. di "restricted = `restricted'"
+restricted = 0
+
+. di "logs = `logs'"
+logs = 0
+
+. 
+. global INPUT "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_
+> VBP/Cleaning/Output"
+
+. 
+. // Option 1: Run regression on differences (i.e. change in log price and chan
+> ge in interest rate)
+. if `differenced' {
+.         use "$INPUT/final_data.dta", clear
+.         
+.         global tag "differences"
+.         
+.         // We are not restricting the sample, so use all observations
+.         gen obs_to_use1 = 1
+.         gen obs_to_use2 = 1
+.         gen obs_to_use3 = 1
+.         gen obs_to_use4 = 1
+.         
+.         global bucket_name bucket_3_sale
+.         global bucket_11_name bucket_11_sale
+.         global dep_var d_log_price
+.         global indep_var d_interest_rate
+.         global indep_var_label "$\Delta$ Interest Rate"
+.         global fes `" "i.location_n##i.date_trans##i.L_date_trans" "i.locatio
+> n_n##i.date_trans##i.L_date_trans##i.type_n" "i.location_n##i.date_trans##i.L
+> _date_trans##i.price_quintile##i.type_n" "i.location_n##i.date_trans##i.L_dat
+> e_trans##i.type_n i.location_n##i.$bucket_name"  "'
+.         global cluster "date_trans L_date_trans location_n"
+.         global fe_vars "location_n date_trans L_date_trans type_n price_quint
+> ile"
+. }
+
+. 
+. // Option 2: Run regression on levels 
+. else {
+.         use "$INPUT/full_cleaned_data_with_lags.dta", clear
+.         global tag "levels"
+.         
+.         // We are also interested in recording results restricting the data s
+> et only to those observations that would be in the differences set
+.         if `restricted' {
+.                 global tag "restricted_$tag"
+.                 
+.                 // Drop properties with only one date or no registration info
+> rmation
+.                 drop if missing(L_date_trans)
+.                 
+.                 // Drop lease extensions
+.                 drop if leasehold & date_registered != L_date_registered
+.                 
+.                 // Generate useful data
+.                 cap drop bucket_3 price_quintile
+.                 xtile bucket_3 = lease_duration_at_trans, nq(2)
+.                 replace bucket_3 = 3 if !leasehold
+. 
+.                 xtile price_quintile = price, nq(5)
+.                 
+.                 // Generate keys for fixed effects
+.                 egen id1 = group(date_trans L_date_trans location_n)
+.                 duplicates tag id1, gen(dup1)
+.                 gen obs_to_use1 = 0 if dup1==0
+.                 replace obs_to_use1 = 1 if dup1 > 0
+.                 count if obs_to_use1
+.                 
+.                 egen id2 = group(date_trans L_date_trans location_n type_n)
+.                 duplicates tag id2, gen(dup2)
+.                 gen obs_to_use2 = 0 if dup2==0
+.                 replace obs_to_use2 = 1 if dup2 > 0
+.                 count if obs_to_use2
+.                 
+.                 egen id3 = group(date_trans L_date_trans location_n type_n pr
+> ice_quintile)
+.                 duplicates tag id3, gen(dup3)
+.                 gen obs_to_use3 = 0 if dup3==0
+.                 replace obs_to_use3 = 1 if dup3 > 0
+.                 count if obs_to_use3
+.                 
+.                 egen id4_1 = group(location_n bucket_3)
+.                 gen id4_2 = id2
+.                 duplicates tag id4_1, gen(dup4_1)
+.                 duplicates tag id4_2, gen(dup4_2)
+.                 gen obs_to_use4 = 0 if dup4_1==0 | dup4_2==0
+.                 replace obs_to_use4 = 1 if dup4_1 > 0 & dup4_2 > 0
+.                 count if obs_to_use4
+.         }
+.         
+.         else {
+.                 // Generate useful data
+.                 cap drop bucket_3 price_quintile
+.                 xtile bucket_3 = lease_duration_at_trans, nq(2)
+.                 replace bucket_3 = 3 if !leasehold
+. 
+.                 xtile price_quintile = price, nq(5)
+.                 
+.                 gen obs_to_use1 = 1
+.                 gen obs_to_use2 = 1
+.                 gen obs_to_use3 = 1
+.                 gen obs_to_use4 = 1
+.         }
+.         
+.         xtile bucket_11 = lease_duration_at_trans, nq(10)
+.         replace bucket_11 = 11 if !leasehold
+.         
+.         // Save relevant variable names
+.         global bucket_name bucket_3
+.         global bucket_11_name bucket_11
+.         global indep_var interest_rate
+.         global indep_var_label "Interest Rate"
+.         global fes `" "i.location_n##i.date_trans" "i.location_n##i.date_tran
+> ##i.type_n" "i.location_n##i.date_trans##i.price_quintile##i.type_n" "i.locat
+> ion_n##i.date_trans##i.type_n i.location_n##i.$bucket_name" "'
+.         global cluster "date_trans location_n"
+.         global fe_vars "location_n date_trans type_n price_quintile"
+.         
+.         // We want to look at the effect on both price and log_price
+.         if `logs' {
+.                 global tag "logs_$tag"
+.                 global dep_var log_price
+.         }
+.         else {
+.                 global dep_var price
+.         }
+. }
+
+. 
+. if `duplicate_registration' {
+.         drop if missing(number_years_missing)
+.         if `differences' {
+.                 drop if missing(L_number_years_missing)
+.         }
+.         global tag "missing_$tag"
+. }
+
+. 
+. if `flats' {
+.         drop if type != "F"
+.         global tag "flats_$tag"
+. }
+
+. 
+. di "Tag: $tag"
+Tag: differences
+
+. 
+end of do-file
+
+. 
+. di "Fixed effects:"
+Fixed effects:
+
+. di $fes
+i.location_n##i.date_trans##i.L_date_transi.location_n##i.date_trans##i.L_date_
+> trans##i.type_ni.location_n##i.date_trans##i.L_date_trans##i.price_quintile##
+> i.type_ni.location_n##i.date_trans##i.L_date_trans##i.type_n i.location_n##i.
+> bucket_3_sale
+
+. 
+. cap drop restricted_obs_to_use*
+
+. local count = 1
+
+. eststo clear 
+
+. foreach fe of global fes  {
+  2.         di "`fe'"
+  3.         di "reghdfe $dep_var i.$bucket_name##c.$indep_var, absorb(`fe') cl
+> uster($cluster)"
+  4.         eststo: reghdfe $dep_var i.$bucket_name##c.$indep_var if obs_to_us
+> e`count', absorb(`fe') cluster($cluster)
+  5.         gen restricted_obs_to_use_`count' = e(sample)
+  6.         local count = `count'+1
+  7. }
+i.location_n##i.date_trans##i.L_date_trans
+reghdfe d_log_price i.bucket_3_sale##c.d_interest_rate, absorb(i.location_n##i.
+> date_trans##i.L_date_trans) cluster(date_trans L_date_trans location_n)
+(dropped 3260467 singleton observations)
+note: d_interest_rate is probably collinear with the fixed effects (all partial
+> led-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 1 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: d_interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   =  8,028,107
+Absorbing 1 HDFE group                            F(   4,    108) =      65.01
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.7442
+Number of clusters (date_trans) =        109      Adj R-squared   =     0.6162
+Number of clusters (L_date_trans) =        109    Within R-sq.    =     0.0120
+Number of clusters (location_n) =      2,268      Root MSE        =    25.2514
+
+   (Std. err. adjusted for 109 clusters in date_trans L_date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+ d_log_price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+bucket_3_s~e |
+          2  |  -.9204766   .2836414    -3.25   0.002    -1.482703   -.3582501
+          3  |   2.159532   .6010975     3.59   0.000     .9680526    3.351011
+             |
+d_interest~e |          0   1.31e-16     0.00   1.000    -2.59e-16    2.59e-16
+             |
+bucket_3_s~e#|
+          c. |
+d_interest~e |
+          2  |  -1.493075   .1433762   -10.41   0.000    -1.777271   -1.208878
+          3  |  -3.718402   .3214296   -11.57   0.000    -4.355531   -3.081273
+             |
+       _cons |   33.28162   .5796777    57.41   0.000     32.13259    34.43064
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-------------------------------------------------------------------------------
+> -+
+                            Absorbed FE | Categories  - Redundant  = Num. Coefs
+>  |
+----------------------------------------+--------------------------------------
+> -|
+     location_n#date_trans#L_date_trans |   2677421     2677421           0    
+> *                                                                            
+>  |
+-------------------------------------------------------------------------------
+> -+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est1 stored)
+i.location_n##i.date_trans##i.L_date_trans##i.type_n
+reghdfe d_log_price i.bucket_3_sale##c.d_interest_rate, absorb(i.location_n##i.
+> date_trans##i.L_date_trans##i.type_n) cluster(date_trans L_date_trans locatio
+> n_n)
+(dropped 6649089 singleton observations)
+note: d_interest_rate is probably collinear with the fixed effects (all partial
+> led-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 1 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: d_interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   =  4,639,485
+Absorbing 1 HDFE group                            F(   4,    108) =      57.21
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.7912
+Number of clusters (date_trans) =        109      Adj R-squared   =     0.6454
+Number of clusters (L_date_trans) =        109    Within R-sq.    =     0.0005
+Number of clusters (location_n) =      2,257      Root MSE        =    23.0063
+
+   (Std. err. adjusted for 109 clusters in date_trans L_date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+ d_log_price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+bucket_3_s~e |
+          2  |  -.9058822   .2760097    -3.28   0.001    -1.452981   -.3587832
+          3  |   .8697684    .321886     2.70   0.008     .2317345    1.507802
+             |
+d_interest~e |          0   6.09e-17     0.00   1.000    -1.21e-16    1.21e-16
+             |
+bucket_3_s~e#|
+          c. |
+d_interest~e |
+          2  |  -.5979868   .1163663    -5.14   0.000     -.828645   -.3673287
+          3  |  -1.270101   .1512773    -8.40   0.000    -1.569959   -.9702436
+             |
+       _cons |   37.36422   .2909636   128.42   0.000     36.78748    37.94096
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-------------------------------------------------------------------------------
+> ----------+
+                                     Absorbed FE | Categories  - Redundant  = N
+> um. Coefs                                                                    
+>           |
+-------------------------------------------------+-----------------------------
+> ----------|
+       location_n#date_trans#L_date_trans#type_n |   1907730     1907730       
+>     0                                                                        
+>          *                                                                   
+>           |
+-------------------------------------------------------------------------------
+> ----------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est2 stored)
+i.location_n##i.date_trans##i.L_date_trans##i.price_quintile##i.type_n
+reghdfe d_log_price i.bucket_3_sale##c.d_interest_rate, absorb(i.location_n##i.
+> date_trans##i.L_date_trans##i.price_quintile##i.type_n) cluster(date_trans L_
+> date_trans location_n)
+(dropped 8380864 singleton observations)
+note: d_interest_rate is probably collinear with the fixed effects (all partial
+> led-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 1 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: d_interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   =  2,907,710
+Absorbing 1 HDFE group                            F(   4,    108) =      84.35
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.8329
+Number of clusters (date_trans) =        109      Adj R-squared   =     0.7042
+Number of clusters (L_date_trans) =        109    Within R-sq.    =     0.0009
+Number of clusters (location_n) =      2,245      Root MSE        =    20.6098
+
+   (Std. err. adjusted for 109 clusters in date_trans L_date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+ d_log_price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+bucket_3_s~e |
+          2  |   1.293634   .2191458     5.90   0.000      .859249    1.728019
+          3  |   3.276711   .2461485    13.31   0.000     2.788802     3.76462
+             |
+d_interest~e |          0   7.60e-10     0.00   1.000    -1.51e-09    1.51e-09
+             |
+bucket_3_s~e#|
+          c. |
+d_interest~e |
+          2  |  -.3477959   .1022123    -3.40   0.001    -.5503983   -.1451935
+          3  |  -.8915163   .1363961    -6.54   0.000    -1.161877   -.6211556
+             |
+       _cons |   35.70188   .2262513   157.80   0.000     35.25341    36.15035
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-------------------------------------------------------------------------------
+> ---------------------------+
+                                                      Absorbed FE | Categories 
+>  - Redundant                                                                 
+>               = Num. Coefs                                                   
+>                            |
+------------------------------------------------------------------+------------
+> ---------------------------|
+         location_n#date_trans#L_date_trans#price_quintile#type_n |   1265261  
+>    1265261                                                                   
+>                      0                                                       
+>                           *                                                  
+>                            |
+-------------------------------------------------------------------------------
+> ---------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est3 stored)
+i.location_n##i.date_trans##i.L_date_trans##i.type_n i.location_n##i.bucket_3_s
+> ale
+reghdfe d_log_price i.bucket_3_sale##c.d_interest_rate, absorb(i.location_n##i.
+> date_trans##i.L_date_trans##i.type_n i.location_n##i.bucket_3_sale) cluster(d
+> ate_trans L_date_trans location_n)
+(dropped 6649371 singleton observations)
+note: 2bn.bucket_3_sale is probably collinear with the fixed effects (all parti
+> alled-out values are close to zero; tol = 1.0e-09)
+note: 3bn.bucket_3_sale is probably collinear with the fixed effects (all parti
+> alled-out values are close to zero; tol = 1.0e-09)
+note: d_interest_rate is probably collinear with the fixed effects (all partial
+> led-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 85 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: 2.bucket_3_sale omitted because of collinearity
+note: 3.bucket_3_sale omitted because of collinearity
+note: d_interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   =  4,639,203
+Absorbing 2 HDFE groups                           F(   2,    108) =      36.06
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.7918
+Number of clusters (date_trans) =        109      Adj R-squared   =     0.6457
+Number of clusters (L_date_trans) =        109    Within R-sq.    =     0.0001
+Number of clusters (location_n) =      2,256      Root MSE        =    22.9952
+
+   (Std. err. adjusted for 109 clusters in date_trans L_date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+ d_log_price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+bucket_3_s~e |
+          2  |          0  (omitted)
+          3  |          0  (omitted)
+             |
+d_interest~e |          0  (omitted)
+             |
+bucket_3_s~e#|
+          c. |
+d_interest~e |
+          2  |  -.6107563   .1213665    -5.03   0.000    -.8513258   -.3701868
+          3  |  -1.299375   .1541795    -8.43   0.000    -1.604985   -.9937642
+             |
+       _cons |   37.93169   .1801782   210.52   0.000     37.57455    38.28884
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-------------------------------------------------------------------------------
+> ----------+
+                                     Absorbed FE | Categories  - Redundant  = N
+> um. Coefs                                                                    
+>           |
+-------------------------------------------------+-----------------------------
+> ----------|
+       location_n#date_trans#L_date_trans#type_n |   1907597     1907597       
+>     0                                                                        
+>          *                                                                   
+>           |
+                        location_n#bucket_3_sale |      6053        6053       
+>     0                                                                        
+>          *                                                                   
+>           |
+-------------------------------------------------------------------------------
+> ----------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est4 stored)
+
+. esttab using "$TABLES/main_regression_$tag.tex", ///
+>         se title("Baseline Regression Results \label{tab: main $tag}") ///
+>         keep(2.$bucket_name#c.$indep_var ///
+>                  3.$bucket_name#c.$indep_var) ///
+>         varlabels(2.$bucket_name#c.$indep_var "\multirow{2}{4cm}{High Duratio
+> n Leasehold x $indep_var_label}" ///
+>                           3.$bucket_name#c.$indep_var "\multirow{2}{4cm}{Free
+> hold x $indep_var_label}") ///
+>         gaps replace substitute(\_ _)
+(output written to /Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Main Regression
+> /Tables/main_regression_differences.tex)
+
+. //      
+. // Repeat column 1 using observations from column 2
+. 
+. eststo clear
+
+. local fe1 : word 1 of $fes
+
+. di "First fixed effect: `fe1'"
+First fixed effect: i.location_n##i.date_trans##i.L_date_trans
+
+. di "reghdfe $dep_var i.$bucket_name##c.$indep_var if restricted_obs_to_use, a
+> bsorb(`fe1') cluster($cluster)"
+reghdfe d_log_price i.bucket_3_sale##c.d_interest_rate if restricted_obs_to_use
+> , absorb(i.location_n##i.date_trans##i.L_date_trans) cluster(date_trans L_dat
+> e_trans location_n)
+
+. eststo: reghdfe $dep_var i.$bucket_name##c.$indep_var if restricted_obs_to_us
+> e_2, absorb(`fe1') cluster($cluster)
+note: d_interest_rate is probably collinear with the fixed effects (all partial
+> led-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 1 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: d_interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   =  4,639,485
+Absorbing 1 HDFE group                            F(   4,    108) =      30.79
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.7659
+Number of clusters (date_trans) =        109      Adj R-squared   =     0.6419
+Number of clusters (L_date_trans) =        109    Within R-sq.    =     0.0026
+Number of clusters (location_n) =      2,257      Root MSE        =    23.1174
+
+   (Std. err. adjusted for 109 clusters in date_trans L_date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+ d_log_price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+bucket_3_s~e |
+          2  |  -.9390686   .2764464    -3.40   0.001    -1.487033   -.3911038
+          3  |   1.621602   .5157392     3.14   0.002      .599317    2.643886
+             |
+d_interest~e |          0   3.39e-09     0.00   1.000    -6.73e-09    6.73e-09
+             |
+bucket_3_s~e#|
+          c. |
+d_interest~e |
+          2  |  -.9473355   .1521215    -6.23   0.000    -1.248867   -.6458043
+          3  |  -2.222323    .335155    -6.63   0.000    -2.886659   -1.557988
+             |
+       _cons |   35.67781   .5158155    69.17   0.000     34.65538    36.70025
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-------------------------------------------------------------------------------
+> -+
+                            Absorbed FE | Categories  - Redundant  = Num. Coefs
+>  |
+----------------------------------------+--------------------------------------
+> -|
+     location_n#date_trans#L_date_trans |   1606647     1606647           0    
+> *                                                                            
+>  |
+-------------------------------------------------------------------------------
+> -+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est1 stored)
+
+. esttab using "$TABLES/main_regression_restricted_to_col_2_$tag.tex", ///
+>         se title("Baseline Regression Results, Without Singleton Observations
+>  \label{tab: main $tag restricted col2}") ///
+>         keep(2.$bucket_name#c.$indep_var ///
+>                  3.$bucket_name#c.$indep_var) ///
+>         varlabels(2.$bucket_name#c.$indep_var "\multirow{2}{4cm}{High Duratio
+> n Leasehold x $indep_var_label}" ///
+>                           3.$bucket_name#c.$indep_var "\multirow{2}{4cm}{Free
+> hold x $indep_var_label}") ///
+>         gaps replace substitute(\_ _)
+(output written to /Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Main Regression
+> /Tables/main_regression_restricted_to_col_2_differences.tex)
+
+.         
+. // Repeat all using same observations for all columns
+. keep if restricted_obs_to_use_1 & restricted_obs_to_use_2 & restricted_obs_to
+> _use_3 & restricted_obs_to_use_4
+(8,381,002 observations deleted)
+
+. 
+. eststo clear 
+
+. foreach fe of local fes  {
+  2.         di "`fe'"
+  3.         di "reghdfe $dep_var i.$bucket_name##c.$indep_var, absorb(`fe') cl
+> uster($cluster)"
+  4.         eststo: reghdfe $dep_var i.$bucket_name##c.$indep_var, absorb(`fe'
+> ) cluster($cluster)
+  5. }
+
+. esttab using "$TABLES/main_regression_fully_restricted_$tag.tex", ///
+>         se title("Baseline Regression Results \label{tab: main $tag}") ///
+>         keep(2.$bucket_name#c.$indep_var ///
+>                  3.$bucket_name#c.$indep_var) ///
+>         varlabels(2.$bucket_name#c.$indep_var "\multirow{2}{4cm}{High Duratio
+> n Leasehold x $indep_var_label}" ///
+>                           3.$bucket_name#c.$indep_var "\multirow{2}{4cm}{Free
+> hold x $indep_var_label}") ///
+>         gaps replace substitute(\_ _)
+(output written to /Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Main Regression
+> /Tables/main_regression_fully_restricted_differences.tex)
+
+. 
+end of do-file
+
+. do main_regression 0 0 0 0 0
+
+. local differenced = `1'
+
+. local restricted = `2'
+
+. local logs = `3'
+
+. local duplicate_registration = `4'
+
+. local flats = `5'
+
+. 
+. global INPUT "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_
+> VBP/Cleaning/Output"
+
+. global RESULTS "/Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Main Regression"
+
+. global TABLES "$RESULTS/Tables"
+
+. global FIGURES "$RESULTS/Figures"
+
+. 
+. // Select correct sample according to parameters
+. do select_sample `differenced' `restricted' `logs' `duplicate_registration' `
+> flats'
+
+. local differenced = `1'
+
+. local restricted = `2'
+
+. local logs = `3'
+
+. local duplicate_registration = `4'
+
+. local flats = `5'
+
+. 
+. di "differenced = `differenced'"
+differenced = 0
+
+. di "restricted = `restricted'"
+restricted = 0
+
+. di "logs = `logs'"
+logs = 0
+
+. 
+. global INPUT "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_
+> VBP/Cleaning/Output"
+
+. 
+. // Option 1: Run regression on differences (i.e. change in log price and chan
+> ge in interest rate)
+. if `differenced' {
+.         use "$INPUT/final_data.dta", clear
+.         
+.         global tag "differences"
+.         
+.         // We are not restricting the sample, so use all observations
+.         gen obs_to_use1 = 1
+.         gen obs_to_use2 = 1
+.         gen obs_to_use3 = 1
+.         gen obs_to_use4 = 1
+.         
+.         global bucket_name bucket_3_sale
+.         global bucket_11_name bucket_11_sale
+.         global dep_var d_log_price
+.         global indep_var d_interest_rate
+.         global indep_var_label "$\Delta$ Interest Rate"
+.         global fes `" "i.location_n##i.date_trans##i.L_date_trans" "i.locatio
+> n_n##i.date_trans##i.L_date_trans##i.type_n" "i.location_n##i.date_trans##i.L
+> _date_trans##i.price_quintile##i.type_n" "i.location_n##i.date_trans##i.L_dat
+> e_trans##i.type_n i.location_n##i.$bucket_name"  "'
+.         global cluster "date_trans L_date_trans location_n"
+.         global fe_vars "location_n date_trans L_date_trans type_n price_quint
+> ile"
+. }
+
+. 
+. // Option 2: Run regression on levels 
+. else {
+.         use "$INPUT/full_cleaned_data_with_lags.dta", clear
+.         global tag "levels"
+.         
+.         // We are also interested in recording results restricting the data s
+> et only to those observations that would be in the differences set
+.         if `restricted' {
+.                 global tag "restricted_$tag"
+.                 
+.                 // Drop properties with only one date or no registration info
+> rmation
+.                 drop if missing(L_date_trans)
+.                 
+.                 // Drop lease extensions
+.                 drop if leasehold & date_registered != L_date_registered
+.                 
+.                 // Generate useful data
+.                 cap drop bucket_3 price_quintile
+.                 xtile bucket_3 = lease_duration_at_trans, nq(2)
+.                 replace bucket_3 = 3 if !leasehold
+. 
+.                 xtile price_quintile = price, nq(5)
+.                 
+.                 // Generate keys for fixed effects
+.                 egen id1 = group(date_trans L_date_trans location_n)
+.                 duplicates tag id1, gen(dup1)
+.                 gen obs_to_use1 = 0 if dup1==0
+.                 replace obs_to_use1 = 1 if dup1 > 0
+.                 count if obs_to_use1
+.                 
+.                 egen id2 = group(date_trans L_date_trans location_n type_n)
+.                 duplicates tag id2, gen(dup2)
+.                 gen obs_to_use2 = 0 if dup2==0
+.                 replace obs_to_use2 = 1 if dup2 > 0
+.                 count if obs_to_use2
+.                 
+.                 egen id3 = group(date_trans L_date_trans location_n type_n pr
+> ice_quintile)
+.                 duplicates tag id3, gen(dup3)
+.                 gen obs_to_use3 = 0 if dup3==0
+.                 replace obs_to_use3 = 1 if dup3 > 0
+.                 count if obs_to_use3
+.                 
+.                 egen id4_1 = group(location_n bucket_3)
+.                 gen id4_2 = id2
+.                 duplicates tag id4_1, gen(dup4_1)
+.                 duplicates tag id4_2, gen(dup4_2)
+.                 gen obs_to_use4 = 0 if dup4_1==0 | dup4_2==0
+.                 replace obs_to_use4 = 1 if dup4_1 > 0 & dup4_2 > 0
+.                 count if obs_to_use4
+.         }
+.         
+.         else {
+.                 // Generate useful data
+.                 cap drop bucket_3 price_quintile
+.                 xtile bucket_3 = lease_duration_at_trans, nq(2)
+.                 replace bucket_3 = 3 if !leasehold
+(20,568,914 real changes made)
+. 
+.                 xtile price_quintile = price, nq(5)
+.                 
+.                 gen obs_to_use1 = 1
+.                 gen obs_to_use2 = 1
+.                 gen obs_to_use3 = 1
+.                 gen obs_to_use4 = 1
+.         }
+.         
+.         xtile bucket_11 = lease_duration_at_trans, nq(10)
+.         replace bucket_11 = 11 if !leasehold
+(20,568,914 real changes made)
+.         
+.         // Save relevant variable names
+.         global bucket_name bucket_3
+.         global bucket_11_name bucket_11
+.         global indep_var interest_rate
+.         global indep_var_label "Interest Rate"
+.         global fes `" "i.location_n##i.date_trans" "i.location_n##i.date_tran
+> ##i.type_n" "i.location_n##i.date_trans##i.price_quintile##i.type_n" "i.locat
+> ion_n##i.date_trans##i.type_n i.location_n##i.$bucket_name" "'
+.         global cluster "date_trans location_n"
+.         global fe_vars "location_n date_trans type_n price_quintile"
+.         
+.         // We want to look at the effect on both price and log_price
+.         if `logs' {
+.                 global tag "logs_$tag"
+.                 global dep_var log_price
+.         }
+.         else {
+.                 global dep_var price
+.         }
+. }
+
+. 
+. if `duplicate_registration' {
+.         drop if missing(number_years_missing)
+.         if `differences' {
+.                 drop if missing(L_number_years_missing)
+.         }
+.         global tag "missing_$tag"
+. }
+
+. 
+. if `flats' {
+.         drop if type != "F"
+.         global tag "flats_$tag"
+. }
+
+. 
+. di "Tag: $tag"
+Tag: levels
+
+. 
+end of do-file
+
+. 
+. di "Fixed effects:"
+Fixed effects:
+
+. di $fes
+i.location_n##i.date_transi.location_n##i.date_tran##i.type_ni.location_n##i.da
+> te_trans##i.price_quintile##i.type_ni.location_n##i.date_trans##i.type_n i.lo
+> cation_n##i.bucket_3
+
+. 
+. cap drop restricted_obs_to_use*
+
+. local count = 1
+
+. eststo clear 
+
+. foreach fe of global fes  {
+  2.         di "`fe'"
+  3.         di "reghdfe $dep_var i.$bucket_name##c.$indep_var, absorb(`fe') cl
+> uster($cluster)"
+  4.         eststo: reghdfe $dep_var i.$bucket_name##c.$indep_var if obs_to_us
+> e`count', absorb(`fe') cluster($cluster)
+  5.         gen restricted_obs_to_use_`count' = e(sample)
+  6.         local count = `count'+1
+  7. }
+i.location_n##i.date_trans
+reghdfe price i.bucket_3##c.interest_rate, absorb(i.location_n##i.date_trans) c
+> luster(date_trans location_n)
+(dropped 2366 singleton observations)
+note: interest_rate is probably collinear with the fixed effects (all partialle
+> d-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 1 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   = 25,798,395
+Absorbing 1 HDFE group                            F(   4,    109) =     162.27
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.1533
+                                                  Adj R-squared   =     0.1451
+Number of clusters (date_trans) =        110      Within R-sq.    =     0.0054
+Number of clusters (location_n) =      2,316      Root MSE        =  7.315e+05
+
+                (Std. err. adjusted for 110 clusters in date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+       price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    bucket_3 |
+          2  |   69469.54   7794.681     8.91   0.000     54020.73    84918.34
+          3  |   298774.5   12647.41    23.62   0.000     273707.7    323841.2
+             |
+interest_r~e |          0   .0000457     0.00   1.000    -.0000905    .0000905
+             |
+    bucket_3#|
+          c. |
+interest_r~e |
+          2  |   -5703.98   1373.965    -4.15   0.000    -8427.135   -2980.826
+          3  |  -39289.46   2227.264   -17.64   0.000    -43703.83    -34875.1
+             |
+       _cons |   89988.01   4966.833    18.12   0.000     80143.91    99832.11
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------------------+
+             Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------------------+---------------------------------------|
+   location_n#date_trans |    247040      247040           0    *|
+-----------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est1 stored)
+i.location_n##i.date_tran##i.type_n
+reghdfe price i.bucket_3##c.interest_rate, absorb(i.location_n##i.date_tran##i.
+> type_n) cluster(date_trans location_n)
+(dropped 62902 singleton observations)
+note: interest_rate is probably collinear with the fixed effects (all partialle
+> d-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 1 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   = 25,737,859
+Absorbing 1 HDFE group                            F(   4,    109) =      49.31
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3529
+                                                  Adj R-squared   =     0.3288
+Number of clusters (date_trans) =        110      Within R-sq.    =     0.0008
+Number of clusters (location_n) =      2,311      Root MSE        =  6.382e+05
+
+                (Std. err. adjusted for 110 clusters in date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+       price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    bucket_3 |
+          2  |   104508.7   9446.305    11.06   0.000     85786.38    123230.9
+          3  |   220964.8   18804.48    11.75   0.000       183695    258234.7
+             |
+interest_r~e |          0   7.16e-13     0.00   1.000    -1.42e-12    1.42e-12
+             |
+    bucket_3#|
+          c. |
+interest_r~e |
+          2  |  -14410.87   1613.236    -8.93   0.000    -17608.25   -11213.48
+          3  |  -34462.39   3515.091    -9.80   0.000    -41429.19    -27495.6
+             |
+       _cons |   135952.6   5615.833    24.21   0.000     124822.2      147083
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+--------------------------------------------------------------------------+
+                      Absorbed FE | Categories  - Redundant  = Num. Coefs |
+----------------------------------+---------------------------------------|
+     location_n#date_trans#type_n |    923999      923999           0    *|
+--------------------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est2 stored)
+i.location_n##i.date_trans##i.price_quintile##i.type_n
+reghdfe price i.bucket_3##c.interest_rate, absorb(i.location_n##i.date_trans##i
+> .price_quintile##i.type_n) cluster(date_trans location_n)
+(dropped 635690 singleton observations)
+note: interest_rate is probably collinear with the fixed effects (all partialle
+> d-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 1 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   = 25,165,071
+Absorbing 1 HDFE group                            F(   4,    109) =      13.27
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.4331
+                                                  Adj R-squared   =     0.3829
+Number of clusters (date_trans) =        110      Within R-sq.    =     0.0001
+Number of clusters (location_n) =      2,308      Root MSE        =  6.056e+05
+
+                (Std. err. adjusted for 110 clusters in date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+       price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    bucket_3 |
+          2  |   47239.81   8366.312     5.65   0.000     30658.05    63821.57
+          3  |   87628.09   13470.09     6.51   0.000      60930.8    114325.4
+             |
+interest_r~e |          0   8.78e-06     0.00   1.000    -.0000174    .0000174
+             |
+    bucket_3#|
+          c. |
+interest_r~e |
+          2  |  -7085.363   1442.293    -4.91   0.000    -9943.942   -4226.784
+          3  |  -14154.74   2408.459    -5.88   0.000    -18928.22   -9381.251
+             |
+       _cons |   182860.8   3940.132    46.41   0.000     175051.6      190670
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-------------------------------------------------------------------------------
+> ------------+
+                                       Absorbed FE | Categories  - Redundant  =
+>  Num. Coefs                                                                  
+>             |
+---------------------------------------------------+---------------------------
+> ------------|
+       location_n#date_trans#price_quintile#type_n |   2046438     2046438     
+>       0                                                                      
+>            *                                                                 
+>             |
+-------------------------------------------------------------------------------
+> ------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est3 stored)
+i.location_n##i.date_trans##i.type_n i.location_n##i.bucket_3
+reghdfe price i.bucket_3##c.interest_rate, absorb(i.location_n##i.date_trans##i
+> .type_n i.location_n##i.bucket_3) cluster(date_trans location_n)
+(dropped 62943 singleton observations)
+note: 2bn.bucket_3 is probably collinear with the fixed effects (all partialled
+> -out values are close to zero; tol = 1.0e-09)
+note: 3bn.bucket_3 is probably collinear with the fixed effects (all partialled
+> -out values are close to zero; tol = 1.0e-09)
+note: interest_rate is probably collinear with the fixed effects (all partialle
+> d-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 57 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: 2.bucket_3 omitted because of collinearity
+note: 3.bucket_3 omitted because of collinearity
+note: interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   = 25,737,818
+Absorbing 2 HDFE groups                           F(   2,    109) =      56.63
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3677
+                                                  Adj R-squared   =     0.3440
+Number of clusters (date_trans) =        110      Within R-sq.    =     0.0003
+Number of clusters (location_n) =      2,310      Root MSE        =  6.307e+05
+
+                (Std. err. adjusted for 110 clusters in date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+       price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    bucket_3 |
+          2  |          0  (omitted)
+          3  |          0  (omitted)
+             |
+interest_r~e |          0  (omitted)
+             |
+    bucket_3#|
+          c. |
+interest_r~e |
+          2  |  -15420.96   1724.902    -8.94   0.000    -18839.66   -12002.26
+          3  |  -31818.21   3005.124   -10.59   0.000    -37774.26   -25862.15
+             |
+       _cons |   314882.1   9786.336    32.18   0.000     295485.9    334278.3
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+--------------------------------------------------------------------------+
+                      Absorbed FE | Categories  - Redundant  = Num. Coefs |
+----------------------------------+---------------------------------------|
+     location_n#date_trans#type_n |    923987      923987           0    *|
+              location_n#bucket_3 |      6732        6732           0    *|
+--------------------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est4 stored)
+
+. esttab using "$TABLES/main_regression_$tag.tex", ///
+>         se title("Baseline Regression Results \label{tab: main $tag}") ///
+>         keep(2.$bucket_name#c.$indep_var ///
+>                  3.$bucket_name#c.$indep_var) ///
+>         varlabels(2.$bucket_name#c.$indep_var "\multirow{2}{4cm}{High Duratio
+> n Leasehold x $indep_var_label}" ///
+>                           3.$bucket_name#c.$indep_var "\multirow{2}{4cm}{Free
+> hold x $indep_var_label}") ///
+>         gaps replace substitute(\_ _)
+(output written to /Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Main Regression
+> /Tables/main_regression_levels.tex)
+
+. //      
+. // Repeat column 1 using observations from column 2
+. 
+. eststo clear
+
+. local fe1 : word 1 of $fes
+
+. di "First fixed effect: `fe1'"
+First fixed effect: i.location_n##i.date_trans
+
+. di "reghdfe $dep_var i.$bucket_name##c.$indep_var if restricted_obs_to_use, a
+> bsorb(`fe1') cluster($cluster)"
+reghdfe price i.bucket_3##c.interest_rate if restricted_obs_to_use, absorb(i.lo
+> cation_n##i.date_trans) cluster(date_trans location_n)
+
+. eststo: reghdfe $dep_var i.$bucket_name##c.$indep_var if restricted_obs_to_us
+> e_2, absorb(`fe1') cluster($cluster)
+note: interest_rate is probably collinear with the fixed effects (all partialle
+> d-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 1 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   = 25,737,859
+Absorbing 1 HDFE group                            F(   4,    109) =     163.75
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.1613
+                                                  Adj R-squared   =     0.1532
+Number of clusters (date_trans) =        110      Within R-sq.    =     0.0054
+Number of clusters (location_n) =      2,311      Root MSE        =  7.168e+05
+
+                (Std. err. adjusted for 110 clusters in date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+       price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    bucket_3 |
+          2  |   71928.95   7838.906     9.18   0.000     56392.49    87465.41
+          3  |   295408.9   12446.46    23.73   0.000     270740.4    320077.4
+             |
+interest_r~e |          0   .0000274     0.00   1.000    -.0000544    .0000544
+             |
+    bucket_3#|
+          c. |
+interest_r~e |
+          2  |  -6170.879   1388.072    -4.45   0.000    -8921.992   -3419.765
+          3  |  -38782.83   2191.601   -17.70   0.000    -43126.51   -34439.15
+             |
+       _cons |   90301.17    4903.59    18.42   0.000     80582.42    100019.9
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------------------+
+             Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------------------+---------------------------------------|
+   location_n#date_trans |    245862      245862           0    *|
+-----------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est1 stored)
+
+. esttab using "$TABLES/main_regression_restricted_to_col_2_$tag.tex", ///
+>         se title("Baseline Regression Results, Without Singleton Observations
+>  \label{tab: main $tag restricted col2}") ///
+>         keep(2.$bucket_name#c.$indep_var ///
+>                  3.$bucket_name#c.$indep_var) ///
+>         varlabels(2.$bucket_name#c.$indep_var "\multirow{2}{4cm}{High Duratio
+> n Leasehold x $indep_var_label}" ///
+>                           3.$bucket_name#c.$indep_var "\multirow{2}{4cm}{Free
+> hold x $indep_var_label}") ///
+>         gaps replace substitute(\_ _)
+(output written to /Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Main Regression
+> /Tables/main_regression_restricted_to_col_2_levels.tex)
+
+.         
+. // Repeat all using same observations for all columns
+. keep if restricted_obs_to_use_1 & restricted_obs_to_use_2 & restricted_obs_to
+> _use_3 & restricted_obs_to_use_4
+(635,707 observations deleted)
+
+. 
+. eststo clear 
+
+. foreach fe of local fes  {
+  2.         di "`fe'"
+  3.         di "reghdfe $dep_var i.$bucket_name##c.$indep_var, absorb(`fe') cl
+> uster($cluster)"
+  4.         eststo: reghdfe $dep_var i.$bucket_name##c.$indep_var, absorb(`fe'
+> ) cluster($cluster)
+  5. }
+
+. esttab using "$TABLES/main_regression_fully_restricted_$tag.tex", ///
+>         se title("Baseline Regression Results \label{tab: main $tag}") ///
+>         keep(2.$bucket_name#c.$indep_var ///
+>                  3.$bucket_name#c.$indep_var) ///
+>         varlabels(2.$bucket_name#c.$indep_var "\multirow{2}{4cm}{High Duratio
+> n Leasehold x $indep_var_label}" ///
+>                           3.$bucket_name#c.$indep_var "\multirow{2}{4cm}{Free
+> hold x $indep_var_label}") ///
+>         gaps replace substitute(\_ _)
+(output written to /Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Main Regression
+> /Tables/main_regression_fully_restricted_levels.tex)
+
+. 
+end of do-file
+
+. do main_regression 0 1 0 0 0
+
+. local differenced = `1'
+
+. local restricted = `2'
+
+. local logs = `3'
+
+. local duplicate_registration = `4'
+
+. local flats = `5'
+
+. 
+. global INPUT "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_
+> VBP/Cleaning/Output"
+
+. global RESULTS "/Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Main Regression"
+
+. global TABLES "$RESULTS/Tables"
+
+. global FIGURES "$RESULTS/Figures"
+
+. 
+. // Select correct sample according to parameters
+. do select_sample `differenced' `restricted' `logs' `duplicate_registration' `
+> flats'
+
+. local differenced = `1'
+
+. local restricted = `2'
+
+. local logs = `3'
+
+. local duplicate_registration = `4'
+
+. local flats = `5'
+
+. 
+. di "differenced = `differenced'"
+differenced = 0
+
+. di "restricted = `restricted'"
+restricted = 1
+
+. di "logs = `logs'"
+logs = 0
+
+. 
+. global INPUT "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_
+> VBP/Cleaning/Output"
+
+. 
+. // Option 1: Run regression on differences (i.e. change in log price and chan
+> ge in interest rate)
+. if `differenced' {
+.         use "$INPUT/final_data.dta", clear
+.         
+.         global tag "differences"
+.         
+.         // We are not restricting the sample, so use all observations
+.         gen obs_to_use1 = 1
+.         gen obs_to_use2 = 1
+.         gen obs_to_use3 = 1
+.         gen obs_to_use4 = 1
+.         
+.         global bucket_name bucket_3_sale
+.         global bucket_11_name bucket_11_sale
+.         global dep_var d_log_price
+.         global indep_var d_interest_rate
+.         global indep_var_label "$\Delta$ Interest Rate"
+.         global fes `" "i.location_n##i.date_trans##i.L_date_trans" "i.locatio
+> n_n##i.date_trans##i.L_date_trans##i.type_n" "i.location_n##i.date_trans##i.L
+> _date_trans##i.price_quintile##i.type_n" "i.location_n##i.date_trans##i.L_dat
+> e_trans##i.type_n i.location_n##i.$bucket_name"  "'
+.         global cluster "date_trans L_date_trans location_n"
+.         global fe_vars "location_n date_trans L_date_trans type_n price_quint
+> ile"
+. }
+
+. 
+. // Option 2: Run regression on levels 
+. else {
+.         use "$INPUT/full_cleaned_data_with_lags.dta", clear
+.         global tag "levels"
+.         
+.         // We are also interested in recording results restricting the data s
+> et only to those observations that would be in the differences set
+.         if `restricted' {
+.                 global tag "restricted_$tag"
+.                 
+.                 // Drop properties with only one date or no registration info
+> rmation
+.                 drop if missing(L_date_trans)
+(14,464,541 observations deleted)
+.                 
+.                 // Drop lease extensions
+.                 drop if leasehold & date_registered != L_date_registered
+(47,646 observations deleted)
+.                 
+.                 // Generate useful data
+.                 cap drop bucket_3 price_quintile
+.                 xtile bucket_3 = lease_duration_at_trans, nq(2)
+.                 replace bucket_3 = 3 if !leasehold
+(9,052,506 real changes made)
+. 
+.                 xtile price_quintile = price, nq(5)
+.                 
+.                 // Generate keys for fixed effects
+.                 egen id1 = group(date_trans L_date_trans location_n)
+.                 duplicates tag id1, gen(dup1)
+
+Duplicates in terms of id1
+.                 gen obs_to_use1 = 0 if dup1==0
+(8,028,107 missing values generated)
+.                 replace obs_to_use1 = 1 if dup1 > 0
+(8,028,107 real changes made)
+.                 count if obs_to_use1
+  8,028,107
+.                 
+.                 egen id2 = group(date_trans L_date_trans location_n type_n)
+.                 duplicates tag id2, gen(dup2)
+
+Duplicates in terms of id2
+.                 gen obs_to_use2 = 0 if dup2==0
+(4,639,485 missing values generated)
+.                 replace obs_to_use2 = 1 if dup2 > 0
+(4,639,485 real changes made)
+.                 count if obs_to_use2
+  4,639,485
+.                 
+.                 egen id3 = group(date_trans L_date_trans location_n type_n pr
+> ice_quintile)
+.                 duplicates tag id3, gen(dup3)
+
+Duplicates in terms of id3
+.                 gen obs_to_use3 = 0 if dup3==0
+(2,889,003 missing values generated)
+.                 replace obs_to_use3 = 1 if dup3 > 0
+(2,889,003 real changes made)
+.                 count if obs_to_use3
+  2,889,003
+.                 
+.                 egen id4_1 = group(location_n bucket_3)
+.                 gen id4_2 = id2
+.                 duplicates tag id4_1, gen(dup4_1)
+
+Duplicates in terms of id4_1
+.                 duplicates tag id4_2, gen(dup4_2)
+
+Duplicates in terms of id4_2
+.                 gen obs_to_use4 = 0 if dup4_1==0 | dup4_2==0
+(4,639,483 missing values generated)
+.                 replace obs_to_use4 = 1 if dup4_1 > 0 & dup4_2 > 0
+(4,639,483 real changes made)
+.                 count if obs_to_use4
+  4,639,483
+.         }
+.         
+.         else {
+.                 // Generate useful data
+.                 cap drop bucket_3 price_quintile
+.                 xtile bucket_3 = lease_duration_at_trans, nq(2)
+.                 replace bucket_3 = 3 if !leasehold
+. 
+.                 xtile price_quintile = price, nq(5)
+.                 
+.                 gen obs_to_use1 = 1
+.                 gen obs_to_use2 = 1
+.                 gen obs_to_use3 = 1
+.                 gen obs_to_use4 = 1
+.         }
+.         
+.         xtile bucket_11 = lease_duration_at_trans, nq(10)
+.         replace bucket_11 = 11 if !leasehold
+(9,052,506 real changes made)
+.         
+.         // Save relevant variable names
+.         global bucket_name bucket_3
+.         global bucket_11_name bucket_11
+.         global indep_var interest_rate
+.         global indep_var_label "Interest Rate"
+.         global fes `" "i.location_n##i.date_trans" "i.location_n##i.date_tran
+> ##i.type_n" "i.location_n##i.date_trans##i.price_quintile##i.type_n" "i.locat
+> ion_n##i.date_trans##i.type_n i.location_n##i.$bucket_name" "'
+.         global cluster "date_trans location_n"
+.         global fe_vars "location_n date_trans type_n price_quintile"
+.         
+.         // We want to look at the effect on both price and log_price
+.         if `logs' {
+.                 global tag "logs_$tag"
+.                 global dep_var log_price
+.         }
+.         else {
+.                 global dep_var price
+.         }
+. }
+
+. 
+. if `duplicate_registration' {
+.         drop if missing(number_years_missing)
+.         if `differences' {
+.                 drop if missing(L_number_years_missing)
+.         }
+.         global tag "missing_$tag"
+. }
+
+. 
+. if `flats' {
+.         drop if type != "F"
+.         global tag "flats_$tag"
+. }
+
+. 
+. di "Tag: $tag"
+Tag: restricted_levels
+
+. 
+end of do-file
+
+. 
+. di "Fixed effects:"
+Fixed effects:
+
+. di $fes
+i.location_n##i.date_transi.location_n##i.date_tran##i.type_ni.location_n##i.da
+> te_trans##i.price_quintile##i.type_ni.location_n##i.date_trans##i.type_n i.lo
+> cation_n##i.bucket_3
+
+. 
+. cap drop restricted_obs_to_use*
+
+. local count = 1
+
+. eststo clear 
+
+. foreach fe of global fes  {
+  2.         di "`fe'"
+  3.         di "reghdfe $dep_var i.$bucket_name##c.$indep_var, absorb(`fe') cl
+> uster($cluster)"
+  4.         eststo: reghdfe $dep_var i.$bucket_name##c.$indep_var if obs_to_us
+> e`count', absorb(`fe') cluster($cluster)
+  5.         gen restricted_obs_to_use_`count' = e(sample)
+  6.         local count = `count'+1
+  7. }
+i.location_n##i.date_trans
+reghdfe price i.bucket_3##c.interest_rate, absorb(i.location_n##i.date_trans) c
+> luster(date_trans location_n)
+note: interest_rate is probably collinear with the fixed effects (all partialle
+> d-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 1 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   =  8,028,107
+Absorbing 1 HDFE group                            F(   4,    108) =     170.42
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.2296
+                                                  Adj R-squared   =     0.2091
+Number of clusters (date_trans) =        109      Within R-sq.    =     0.0123
+Number of clusters (location_n) =      2,268      Root MSE        =  4.277e+05
+
+                (Std. err. adjusted for 109 clusters in date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+       price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    bucket_3 |
+          2  |   96299.81   9932.108     9.70   0.000     76612.65      115987
+          3  |   249568.3   10457.74    23.86   0.000     228839.2    270297.3
+             |
+interest_r~e |          0   .0000359     0.00   1.000    -.0000711    .0000711
+             |
+    bucket_3#|
+          c. |
+interest_r~e |
+          2  |  -10877.92   2094.611    -5.19   0.000     -15029.8   -6726.036
+          3  |  -30504.77   1938.975   -15.73   0.000    -34348.16   -26661.39
+             |
+       _cons |    91612.3   4932.978    18.57   0.000     81834.28    101390.3
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------------------+
+             Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------------------+---------------------------------------|
+   location_n#date_trans |    208924      208924           0    *|
+-----------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est1 stored)
+i.location_n##i.date_tran##i.type_n
+reghdfe price i.bucket_3##c.interest_rate, absorb(i.location_n##i.date_tran##i.
+> type_n) cluster(date_trans location_n)
+note: interest_rate is probably collinear with the fixed effects (all partialle
+> d-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 1 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   =  4,639,485
+Absorbing 1 HDFE group                            F(   4,    108) =      78.49
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.6356
+                                                  Adj R-squared   =     0.5956
+Number of clusters (date_trans) =        109      Within R-sq.    =     0.0009
+Number of clusters (location_n) =      2,257      Root MSE        =  3.290e+05
+
+                (Std. err. adjusted for 109 clusters in date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+       price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    bucket_3 |
+          2  |   65338.04   6215.585    10.51   0.000     53017.67    77658.41
+          3  |   85867.75   6285.084    13.66   0.000     73409.62    98325.88
+             |
+interest_r~e |          0   1.74e-12     0.00   1.000    -3.46e-12    3.46e-12
+             |
+    bucket_3#|
+          c. |
+interest_r~e |
+          2  |  -5728.732   865.5279    -6.62   0.000    -7444.358   -4013.105
+          3  |  -8330.396   969.7042    -8.59   0.000    -10252.52   -6408.274
+             |
+       _cons |   152663.1   3468.149    44.02   0.000     145788.6    159537.5
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+--------------------------------------------------------------------------+
+                      Absorbed FE | Categories  - Redundant  = Num. Coefs |
+----------------------------------+---------------------------------------|
+     location_n#date_trans#type_n |    459046      459046           0    *|
+--------------------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est2 stored)
+i.location_n##i.date_trans##i.price_quintile##i.type_n
+reghdfe price i.bucket_3##c.interest_rate, absorb(i.location_n##i.date_trans##i
+> .price_quintile##i.type_n) cluster(date_trans location_n)
+note: interest_rate is probably collinear with the fixed effects (all partialle
+> d-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 1 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   =  2,889,003
+Absorbing 1 HDFE group                            F(   4,    108) =      20.09
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.6484
+                                                  Adj R-squared   =     0.5743
+Number of clusters (date_trans) =        109      Within R-sq.    =     0.0003
+Number of clusters (location_n) =      2,243      Root MSE        =  4.229e+05
+
+                (Std. err. adjusted for 109 clusters in date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+       price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    bucket_3 |
+          2  |   68870.42   10621.66     6.48   0.000     47816.44     89924.4
+          3  |   94222.54   11642.32     8.09   0.000     71145.43    117299.6
+             |
+interest_r~e |          0   1.76e-13     0.00   1.000    -3.48e-13    3.48e-13
+             |
+    bucket_3#|
+          c. |
+interest_r~e |
+          2  |  -10430.72   1857.069    -5.62   0.000    -14111.76    -6749.69
+          3  |  -15245.64   2073.318    -7.35   0.000    -19355.32   -11135.96
+             |
+       _cons |   173723.1   4270.366    40.68   0.000     165258.5    182187.7
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-------------------------------------------------------------------------------
+> ------------+
+                                       Absorbed FE | Categories  - Redundant  =
+>  Num. Coefs                                                                  
+>             |
+---------------------------------------------------+---------------------------
+> ------------|
+       location_n#date_trans#price_quintile#type_n |    502880      502880     
+>       0                                                                      
+>            *                                                                 
+>             |
+-------------------------------------------------------------------------------
+> ------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est3 stored)
+i.location_n##i.date_trans##i.type_n i.location_n##i.bucket_3
+reghdfe price i.bucket_3##c.interest_rate, absorb(i.location_n##i.date_trans##i
+> .type_n i.location_n##i.bucket_3) cluster(date_trans location_n)
+(dropped 237 singleton observations)
+note: 2bn.bucket_3 is probably collinear with the fixed effects (all partialled
+> -out values are close to zero; tol = 1.0e-09)
+note: 3bn.bucket_3 is probably collinear with the fixed effects (all partialled
+> -out values are close to zero; tol = 1.0e-09)
+note: interest_rate is probably collinear with the fixed effects (all partialle
+> d-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 88 iterations)
+note: 2.bucket_3 omitted because of collinearity
+note: 3.bucket_3 omitted because of collinearity
+note: interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   =  4,639,246
+Absorbing 2 HDFE groups                           F(   2,    108) =      50.41
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.6368
+                                                  Adj R-squared   =     0.5964
+Number of clusters (date_trans) =        109      Within R-sq.    =     0.0001
+Number of clusters (location_n) =      2,256      Root MSE        =  3.279e+05
+
+                (Std. err. adjusted for 109 clusters in date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+       price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    bucket_3 |
+          2  |          0  (omitted)
+          3  |          0  (omitted)
+             |
+interest_r~e |          0  (omitted)
+             |
+    bucket_3#|
+          c. |
+interest_r~e |
+          2  |  -8387.429   1093.831    -7.67   0.000    -10555.59   -6219.266
+          3  |  -11047.68   1123.781    -9.83   0.000    -13275.21   -8820.147
+             |
+       _cons |   236691.1   3542.007    66.82   0.000     229670.2    243711.9
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+--------------------------------------------------------------------------+
+                      Absorbed FE | Categories  - Redundant  = Num. Coefs |
+----------------------------------+---------------------------------------|
+     location_n#date_trans#type_n |    458956      458956           0    *|
+              location_n#bucket_3 |      6053        6053           0    *|
+--------------------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est4 stored)
+
+. esttab using "$TABLES/main_regression_$tag.tex", ///
+>         se title("Baseline Regression Results \label{tab: main $tag}") ///
+>         keep(2.$bucket_name#c.$indep_var ///
+>                  3.$bucket_name#c.$indep_var) ///
+>         varlabels(2.$bucket_name#c.$indep_var "\multirow{2}{4cm}{High Duratio
+> n Leasehold x $indep_var_label}" ///
+>                           3.$bucket_name#c.$indep_var "\multirow{2}{4cm}{Free
+> hold x $indep_var_label}") ///
+>         gaps replace substitute(\_ _)
+(output written to /Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Main Regression
+> /Tables/main_regression_restricted_levels.tex)
+
+. //      
+. // Repeat column 1 using observations from column 2
+. 
+. eststo clear
+
+. local fe1 : word 1 of $fes
+
+. di "First fixed effect: `fe1'"
+First fixed effect: i.location_n##i.date_trans
+
+. di "reghdfe $dep_var i.$bucket_name##c.$indep_var if restricted_obs_to_use, a
+> bsorb(`fe1') cluster($cluster)"
+reghdfe price i.bucket_3##c.interest_rate if restricted_obs_to_use, absorb(i.lo
+> cation_n##i.date_trans) cluster(date_trans location_n)
+
+. eststo: reghdfe $dep_var i.$bucket_name##c.$indep_var if restricted_obs_to_us
+> e_2, absorb(`fe1') cluster($cluster)
+note: interest_rate is probably collinear with the fixed effects (all partialle
+> d-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 1 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   =  4,639,485
+Absorbing 1 HDFE group                            F(   4,    108) =      96.49
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3090
+                                                  Adj R-squared   =     0.2793
+Number of clusters (date_trans) =        109      Within R-sq.    =     0.0070
+Number of clusters (location_n) =      2,257      Root MSE        =  4.393e+05
+
+                (Std. err. adjusted for 109 clusters in date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+       price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    bucket_3 |
+          2  |     109722   14124.96     7.77   0.000     81723.86    137720.1
+          3  |   232239.5   13869.07    16.75   0.000     204748.5    259730.4
+             |
+interest_r~e |          0   3.15e-12     0.00   1.000    -6.25e-12    6.25e-12
+             |
+    bucket_3#|
+          c. |
+interest_r~e |
+          2  |  -12675.69   2984.785    -4.25   0.000    -18592.05   -6759.333
+          3  |   -28356.6   2567.044   -11.05   0.000    -33444.92   -23268.27
+             |
+       _cons |   90613.14   5774.116    15.69   0.000     79167.84    102058.4
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------------------+
+             Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------------------+---------------------------------------|
+   location_n#date_trans |    191074      191074           0    *|
+-----------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est1 stored)
+
+. esttab using "$TABLES/main_regression_restricted_to_col_2_$tag.tex", ///
+>         se title("Baseline Regression Results, Without Singleton Observations
+>  \label{tab: main $tag restricted col2}") ///
+>         keep(2.$bucket_name#c.$indep_var ///
+>                  3.$bucket_name#c.$indep_var) ///
+>         varlabels(2.$bucket_name#c.$indep_var "\multirow{2}{4cm}{High Duratio
+> n Leasehold x $indep_var_label}" ///
+>                           3.$bucket_name#c.$indep_var "\multirow{2}{4cm}{Free
+> hold x $indep_var_label}") ///
+>         gaps replace substitute(\_ _)
+(output written to /Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Main Regression
+> /Tables/main_regression_restricted_to_col_2_restricted_levels.tex)
+
+.         
+. // Repeat all using same observations for all columns
+. keep if restricted_obs_to_use_1 & restricted_obs_to_use_2 & restricted_obs_to
+> _use_3 & restricted_obs_to_use_4
+(8,399,671 observations deleted)
+
+. 
+. eststo clear 
+
+. foreach fe of local fes  {
+  2.         di "`fe'"
+  3.         di "reghdfe $dep_var i.$bucket_name##c.$indep_var, absorb(`fe') cl
+> uster($cluster)"
+  4.         eststo: reghdfe $dep_var i.$bucket_name##c.$indep_var, absorb(`fe'
+> ) cluster($cluster)
+  5. }
+
+. esttab using "$TABLES/main_regression_fully_restricted_$tag.tex", ///
+>         se title("Baseline Regression Results \label{tab: main $tag}") ///
+>         keep(2.$bucket_name#c.$indep_var ///
+>                  3.$bucket_name#c.$indep_var) ///
+>         varlabels(2.$bucket_name#c.$indep_var "\multirow{2}{4cm}{High Duratio
+> n Leasehold x $indep_var_label}" ///
+>                           3.$bucket_name#c.$indep_var "\multirow{2}{4cm}{Free
+> hold x $indep_var_label}") ///
+>         gaps replace substitute(\_ _)
+(output written to /Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Main Regression
+> /Tables/main_regression_fully_restricted_restricted_levels.tex)
+
+. 
+end of do-file
+
+. do main_regression 1 0 0 0 1
+
+. local differenced = `1'
+
+. local restricted = `2'
+
+. local logs = `3'
+
+. local duplicate_registration = `4'
+
+. local flats = `5'
+
+. 
+. global INPUT "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_
+> VBP/Cleaning/Output"
+
+. global RESULTS "/Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Main Regression"
+
+. global TABLES "$RESULTS/Tables"
+
+. global FIGURES "$RESULTS/Figures"
+
+. 
+. // Select correct sample according to parameters
+. do select_sample `differenced' `restricted' `logs' `duplicate_registration' `
+> flats'
+
+. local differenced = `1'
+
+. local restricted = `2'
+
+. local logs = `3'
+
+. local duplicate_registration = `4'
+
+. local flats = `5'
+
+. 
+. di "differenced = `differenced'"
+differenced = 1
+
+. di "restricted = `restricted'"
+restricted = 0
+
+. di "logs = `logs'"
+logs = 0
+
+. 
+. global INPUT "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_
+> VBP/Cleaning/Output"
+
+. 
+. // Option 1: Run regression on differences (i.e. change in log price and chan
+> ge in interest rate)
+. if `differenced' {
+.         use "$INPUT/final_data.dta", clear
+.         
+.         global tag "differences"
+.         
+.         // We are not restricting the sample, so use all observations
+.         gen obs_to_use1 = 1
+.         gen obs_to_use2 = 1
+.         gen obs_to_use3 = 1
+.         gen obs_to_use4 = 1
+.         
+.         global bucket_name bucket_3_sale
+.         global bucket_11_name bucket_11_sale
+.         global dep_var d_log_price
+.         global indep_var d_interest_rate
+.         global indep_var_label "$\Delta$ Interest Rate"
+.         global fes `" "i.location_n##i.date_trans##i.L_date_trans" "i.locatio
+> n_n##i.date_trans##i.L_date_trans##i.type_n" "i.location_n##i.date_trans##i.L
+> _date_trans##i.price_quintile##i.type_n" "i.location_n##i.date_trans##i.L_dat
+> e_trans##i.type_n i.location_n##i.$bucket_name"  "'
+.         global cluster "date_trans L_date_trans location_n"
+.         global fe_vars "location_n date_trans L_date_trans type_n price_quint
+> ile"
+. }
+
+. 
+. // Option 2: Run regression on levels 
+. else {
+.         use "$INPUT/full_cleaned_data_with_lags.dta", clear
+.         global tag "levels"
+.         
+.         // We are also interested in recording results restricting the data s
+> et only to those observations that would be in the differences set
+.         if `restricted' {
+.                 global tag "restricted_$tag"
+.                 
+.                 // Drop properties with only one date or no registration info
+> rmation
+.                 drop if missing(L_date_trans)
+.                 
+.                 // Drop lease extensions
+.                 drop if leasehold & date_registered != L_date_registered
+.                 
+.                 // Generate useful data
+.                 cap drop bucket_3 price_quintile
+.                 xtile bucket_3 = lease_duration_at_trans, nq(2)
+.                 replace bucket_3 = 3 if !leasehold
+. 
+.                 xtile price_quintile = price, nq(5)
+.                 
+.                 // Generate keys for fixed effects
+.                 egen id1 = group(date_trans L_date_trans location_n)
+.                 duplicates tag id1, gen(dup1)
+.                 gen obs_to_use1 = 0 if dup1==0
+.                 replace obs_to_use1 = 1 if dup1 > 0
+.                 count if obs_to_use1
+.                 
+.                 egen id2 = group(date_trans L_date_trans location_n type_n)
+.                 duplicates tag id2, gen(dup2)
+.                 gen obs_to_use2 = 0 if dup2==0
+.                 replace obs_to_use2 = 1 if dup2 > 0
+.                 count if obs_to_use2
+.                 
+.                 egen id3 = group(date_trans L_date_trans location_n type_n pr
+> ice_quintile)
+.                 duplicates tag id3, gen(dup3)
+.                 gen obs_to_use3 = 0 if dup3==0
+.                 replace obs_to_use3 = 1 if dup3 > 0
+.                 count if obs_to_use3
+.                 
+.                 egen id4_1 = group(location_n bucket_3)
+.                 gen id4_2 = id2
+.                 duplicates tag id4_1, gen(dup4_1)
+.                 duplicates tag id4_2, gen(dup4_2)
+.                 gen obs_to_use4 = 0 if dup4_1==0 | dup4_2==0
+.                 replace obs_to_use4 = 1 if dup4_1 > 0 & dup4_2 > 0
+.                 count if obs_to_use4
+.         }
+.         
+.         else {
+.                 // Generate useful data
+.                 cap drop bucket_3 price_quintile
+.                 xtile bucket_3 = lease_duration_at_trans, nq(2)
+.                 replace bucket_3 = 3 if !leasehold
+. 
+.                 xtile price_quintile = price, nq(5)
+.                 
+.                 gen obs_to_use1 = 1
+.                 gen obs_to_use2 = 1
+.                 gen obs_to_use3 = 1
+.                 gen obs_to_use4 = 1
+.         }
+.         
+.         xtile bucket_11 = lease_duration_at_trans, nq(10)
+.         replace bucket_11 = 11 if !leasehold
+.         
+.         // Save relevant variable names
+.         global bucket_name bucket_3
+.         global bucket_11_name bucket_11
+.         global indep_var interest_rate
+.         global indep_var_label "Interest Rate"
+.         global fes `" "i.location_n##i.date_trans" "i.location_n##i.date_tran
+> ##i.type_n" "i.location_n##i.date_trans##i.price_quintile##i.type_n" "i.locat
+> ion_n##i.date_trans##i.type_n i.location_n##i.$bucket_name" "'
+.         global cluster "date_trans location_n"
+.         global fe_vars "location_n date_trans type_n price_quintile"
+.         
+.         // We want to look at the effect on both price and log_price
+.         if `logs' {
+.                 global tag "logs_$tag"
+.                 global dep_var log_price
+.         }
+.         else {
+.                 global dep_var price
+.         }
+. }
+
+. 
+. if `duplicate_registration' {
+.         drop if missing(number_years_missing)
+.         if `differences' {
+.                 drop if missing(L_number_years_missing)
+.         }
+.         global tag "missing_$tag"
+. }
+
+. 
+. if `flats' {
+.         drop if type != "F"
+(9,586,153 observations deleted)
+.         global tag "flats_$tag"
+. }
+
+. 
+. di "Tag: $tag"
+Tag: flats_differences
+
+. 
+end of do-file
+
+. 
+. di "Fixed effects:"
+Fixed effects:
+
+. di $fes
+i.location_n##i.date_trans##i.L_date_transi.location_n##i.date_trans##i.L_date_
+> trans##i.type_ni.location_n##i.date_trans##i.L_date_trans##i.price_quintile##
+> i.type_ni.location_n##i.date_trans##i.L_date_trans##i.type_n i.location_n##i.
+> bucket_3_sale
+
+. 
+. cap drop restricted_obs_to_use*
+
+. local count = 1
+
+. eststo clear 
+
+. foreach fe of global fes  {
+  2.         di "`fe'"
+  3.         di "reghdfe $dep_var i.$bucket_name##c.$indep_var, absorb(`fe') cl
+> uster($cluster)"
+  4.         eststo: reghdfe $dep_var i.$bucket_name##c.$indep_var if obs_to_us
+> e`count', absorb(`fe') cluster($cluster)
+  5.         gen restricted_obs_to_use_`count' = e(sample)
+  6.         local count = `count'+1
+  7. }
+i.location_n##i.date_trans##i.L_date_trans
+reghdfe d_log_price i.bucket_3_sale##c.d_interest_rate, absorb(i.location_n##i.
+> date_trans##i.L_date_trans) cluster(date_trans L_date_trans location_n)
+(dropped 1015291 singleton observations)
+note: d_interest_rate is probably collinear with the fixed effects (all partial
+> led-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 1 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: d_interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   =    687,130
+Absorbing 1 HDFE group                            F(   4,    107) =      33.59
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.7958
+Number of clusters (date_trans) =        109      Adj R-squared   =     0.6617
+Number of clusters (L_date_trans) =        108    Within R-sq.    =     0.0013
+Number of clusters (location_n) =      1,972      Root MSE        =    19.9004
+
+   (Std. err. adjusted for 108 clusters in date_trans L_date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+ d_log_price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+bucket_3_s~e |
+          2  |  -1.149767   .3232715    -3.56   0.001    -1.790616   -.5089193
+          3  |   1.233002   .8742655     1.41   0.161    -.5001278    2.966131
+             |
+d_interest~e |          0   1.76e-16     0.00   1.000    -3.48e-16    3.48e-16
+             |
+bucket_3_s~e#|
+          c. |
+d_interest~e |
+          2  |  -.5238903   .1404285    -3.73   0.000    -.8022734   -.2455073
+          3  |  -2.635484   .3965901    -6.65   0.000    -3.421677    -1.84929
+             |
+       _cons |   30.02542   .1424491   210.78   0.000     29.74304    30.30781
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-------------------------------------------------------------------------------
+> -+
+                            Absorbed FE | Categories  - Redundant  = Num. Coefs
+>  |
+----------------------------------------+--------------------------------------
+> -|
+     location_n#date_trans#L_date_trans |    272331      272331           0    
+> *                                                                            
+>  |
+-------------------------------------------------------------------------------
+> -+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est1 stored)
+i.location_n##i.date_trans##i.L_date_trans##i.type_n
+reghdfe d_log_price i.bucket_3_sale##c.d_interest_rate, absorb(i.location_n##i.
+> date_trans##i.L_date_trans##i.type_n) cluster(date_trans L_date_trans locatio
+> n_n)
+(dropped 1015291 singleton observations)
+note: d_interest_rate is probably collinear with the fixed effects (all partial
+> led-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 1 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: d_interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   =    687,130
+Absorbing 1 HDFE group                            F(   4,    107) =      33.59
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.7958
+Number of clusters (date_trans) =        109      Adj R-squared   =     0.6617
+Number of clusters (L_date_trans) =        108    Within R-sq.    =     0.0013
+Number of clusters (location_n) =      1,972      Root MSE        =    19.9004
+
+   (Std. err. adjusted for 108 clusters in date_trans L_date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+ d_log_price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+bucket_3_s~e |
+          2  |  -1.149767   .3232715    -3.56   0.001    -1.790616   -.5089193
+          3  |   1.233002   .8742655     1.41   0.161    -.5001278    2.966131
+             |
+d_interest~e |          0   1.76e-16     0.00   1.000    -3.48e-16    3.48e-16
+             |
+bucket_3_s~e#|
+          c. |
+d_interest~e |
+          2  |  -.5238903   .1404285    -3.73   0.000    -.8022734   -.2455073
+          3  |  -2.635484   .3965901    -6.65   0.000    -3.421677    -1.84929
+             |
+       _cons |   30.02542   .1424491   210.78   0.000     29.74304    30.30781
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-------------------------------------------------------------------------------
+> ----------+
+                                     Absorbed FE | Categories  - Redundant  = N
+> um. Coefs                                                                    
+>           |
+-------------------------------------------------+-----------------------------
+> ----------|
+       location_n#date_trans#L_date_trans#type_n |    272331      272331       
+>     0                                                                        
+>          *                                                                   
+>           |
+-------------------------------------------------------------------------------
+> ----------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est2 stored)
+i.location_n##i.date_trans##i.L_date_trans##i.price_quintile##i.type_n
+reghdfe d_log_price i.bucket_3_sale##c.d_interest_rate, absorb(i.location_n##i.
+> date_trans##i.L_date_trans##i.price_quintile##i.type_n) cluster(date_trans L_
+> date_trans location_n)
+(dropped 1274597 singleton observations)
+note: d_interest_rate is probably collinear with the fixed effects (all partial
+> led-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 1 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: d_interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   =    427,824
+Absorbing 1 HDFE group                            F(   4,    107) =      49.49
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.8576
+Number of clusters (date_trans) =        109      Adj R-squared   =     0.7520
+Number of clusters (L_date_trans) =        108    Within R-sq.    =     0.0029
+Number of clusters (location_n) =      1,917      Root MSE        =    16.5398
+
+   (Std. err. adjusted for 108 clusters in date_trans L_date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+ d_log_price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+bucket_3_s~e |
+          2  |   .6700522   .2009849     3.33   0.001      .271623    1.068481
+          3  |   3.545654   .7226412     4.91   0.000     2.113102    4.978206
+             |
+d_interest~e |          0   8.68e-11     0.00   1.000    -1.72e-10    1.72e-10
+             |
+bucket_3_s~e#|
+          c. |
+d_interest~e |
+          2  |  -.4010924   .0941665    -4.26   0.000    -.5877665   -.2144183
+          3  |  -2.602296    .432143    -6.02   0.000    -3.458969   -1.745622
+             |
+       _cons |   29.11159   .0952674   305.58   0.000     28.92274    29.30045
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-------------------------------------------------------------------------------
+> ---------------------------+
+                                                      Absorbed FE | Categories 
+>  - Redundant                                                                 
+>               = Num. Coefs                                                   
+>                            |
+------------------------------------------------------------------+------------
+> ---------------------------|
+         location_n#date_trans#L_date_trans#price_quintile#type_n |    182073  
+>     182073                                                                   
+>                      0                                                       
+>                           *                                                  
+>                            |
+-------------------------------------------------------------------------------
+> ---------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est3 stored)
+i.location_n##i.date_trans##i.L_date_trans##i.type_n i.location_n##i.bucket_3_s
+> ale
+reghdfe d_log_price i.bucket_3_sale##c.d_interest_rate, absorb(i.location_n##i.
+> date_trans##i.L_date_trans##i.type_n i.location_n##i.bucket_3_sale) cluster(d
+> ate_trans L_date_trans location_n)
+(dropped 1016098 singleton observations)
+note: 2bn.bucket_3_sale is probably collinear with the fixed effects (all parti
+> alled-out values are close to zero; tol = 1.0e-09)
+note: 3bn.bucket_3_sale is probably collinear with the fixed effects (all parti
+> alled-out values are close to zero; tol = 1.0e-09)
+note: d_interest_rate is probably collinear with the fixed effects (all partial
+> led-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 38 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: 2.bucket_3_sale omitted because of collinearity
+note: 3.bucket_3_sale omitted because of collinearity
+note: d_interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   =    686,323
+Absorbing 2 HDFE groups                           F(   2,    107) =      34.63
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.7993
+Number of clusters (date_trans) =        109      Adj R-squared   =     0.6639
+Number of clusters (L_date_trans) =        108    Within R-sq.    =     0.0005
+Number of clusters (location_n) =      1,941      Root MSE        =    19.8289
+
+   (Std. err. adjusted for 108 clusters in date_trans L_date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+ d_log_price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+bucket_3_s~e |
+          2  |          0  (omitted)
+          3  |          0  (omitted)
+             |
+d_interest~e |          0  (omitted)
+             |
+bucket_3_s~e#|
+          c. |
+d_interest~e |
+          2  |  -.5591269   .1404426    -3.98   0.000     -.837538   -.2807158
+          3  |  -2.424405   .3549908    -6.83   0.000    -3.128133   -1.720677
+             |
+       _cons |   29.59335   .0643285   460.03   0.000     29.46583    29.72088
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-------------------------------------------------------------------------------
+> ----------+
+                                     Absorbed FE | Categories  - Redundant  = N
+> um. Coefs                                                                    
+>           |
+-------------------------------------------------+-----------------------------
+> ----------|
+       location_n#date_trans#L_date_trans#type_n |    271943      271943       
+>     0                                                                        
+>          *                                                                   
+>           |
+                        location_n#bucket_3_sale |      4524        4524       
+>     0                                                                        
+>          *                                                                   
+>           |
+-------------------------------------------------------------------------------
+> ----------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est4 stored)
+
+. esttab using "$TABLES/main_regression_$tag.tex", ///
+>         se title("Baseline Regression Results \label{tab: main $tag}") ///
+>         keep(2.$bucket_name#c.$indep_var ///
+>                  3.$bucket_name#c.$indep_var) ///
+>         varlabels(2.$bucket_name#c.$indep_var "\multirow{2}{4cm}{High Duratio
+> n Leasehold x $indep_var_label}" ///
+>                           3.$bucket_name#c.$indep_var "\multirow{2}{4cm}{Free
+> hold x $indep_var_label}") ///
+>         gaps replace substitute(\_ _)
+(output written to /Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Main Regression
+> /Tables/main_regression_flats_differences.tex)
+
+. //      
+. // Repeat column 1 using observations from column 2
+. 
+. eststo clear
+
+. local fe1 : word 1 of $fes
+
+. di "First fixed effect: `fe1'"
+First fixed effect: i.location_n##i.date_trans##i.L_date_trans
+
+. di "reghdfe $dep_var i.$bucket_name##c.$indep_var if restricted_obs_to_use, a
+> bsorb(`fe1') cluster($cluster)"
+reghdfe d_log_price i.bucket_3_sale##c.d_interest_rate if restricted_obs_to_use
+> , absorb(i.location_n##i.date_trans##i.L_date_trans) cluster(date_trans L_dat
+> e_trans location_n)
+
+. eststo: reghdfe $dep_var i.$bucket_name##c.$indep_var if restricted_obs_to_us
+> e_2, absorb(`fe1') cluster($cluster)
+note: d_interest_rate is probably collinear with the fixed effects (all partial
+> led-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 1 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: d_interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   =    687,130
+Absorbing 1 HDFE group                            F(   4,    107) =      33.59
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.7958
+Number of clusters (date_trans) =        109      Adj R-squared   =     0.6617
+Number of clusters (L_date_trans) =        108    Within R-sq.    =     0.0013
+Number of clusters (location_n) =      1,972      Root MSE        =    19.9004
+
+   (Std. err. adjusted for 108 clusters in date_trans L_date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+ d_log_price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+bucket_3_s~e |
+          2  |  -1.149767   .3232715    -3.56   0.001    -1.790616   -.5089193
+          3  |   1.233002   .8742655     1.41   0.161    -.5001278    2.966131
+             |
+d_interest~e |          0   1.76e-16     0.00   1.000    -3.48e-16    3.48e-16
+             |
+bucket_3_s~e#|
+          c. |
+d_interest~e |
+          2  |  -.5238903   .1404285    -3.73   0.000    -.8022734   -.2455073
+          3  |  -2.635484   .3965901    -6.65   0.000    -3.421677    -1.84929
+             |
+       _cons |   30.02542   .1424491   210.78   0.000     29.74304    30.30781
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-------------------------------------------------------------------------------
+> -+
+                            Absorbed FE | Categories  - Redundant  = Num. Coefs
+>  |
+----------------------------------------+--------------------------------------
+> -|
+     location_n#date_trans#L_date_trans |    272331      272331           0    
+> *                                                                            
+>  |
+-------------------------------------------------------------------------------
+> -+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est1 stored)
+
+. esttab using "$TABLES/main_regression_restricted_to_col_2_$tag.tex", ///
+>         se title("Baseline Regression Results, Without Singleton Observations
+>  \label{tab: main $tag restricted col2}") ///
+>         keep(2.$bucket_name#c.$indep_var ///
+>                  3.$bucket_name#c.$indep_var) ///
+>         varlabels(2.$bucket_name#c.$indep_var "\multirow{2}{4cm}{High Duratio
+> n Leasehold x $indep_var_label}" ///
+>                           3.$bucket_name#c.$indep_var "\multirow{2}{4cm}{Free
+> hold x $indep_var_label}") ///
+>         gaps replace substitute(\_ _)
+(output written to /Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Main Regression
+> /Tables/main_regression_restricted_to_col_2_flats_differences.tex)
+
+.         
+. // Repeat all using same observations for all columns
+. keep if restricted_obs_to_use_1 & restricted_obs_to_use_2 & restricted_obs_to
+> _use_3 & restricted_obs_to_use_4
+(1,274,977 observations deleted)
+
+. 
+. eststo clear 
+
+. foreach fe of local fes  {
+  2.         di "`fe'"
+  3.         di "reghdfe $dep_var i.$bucket_name##c.$indep_var, absorb(`fe') cl
+> uster($cluster)"
+  4.         eststo: reghdfe $dep_var i.$bucket_name##c.$indep_var, absorb(`fe'
+> ) cluster($cluster)
+  5. }
+
+. esttab using "$TABLES/main_regression_fully_restricted_$tag.tex", ///
+>         se title("Baseline Regression Results \label{tab: main $tag}") ///
+>         keep(2.$bucket_name#c.$indep_var ///
+>                  3.$bucket_name#c.$indep_var) ///
+>         varlabels(2.$bucket_name#c.$indep_var "\multirow{2}{4cm}{High Duratio
+> n Leasehold x $indep_var_label}" ///
+>                           3.$bucket_name#c.$indep_var "\multirow{2}{4cm}{Free
+> hold x $indep_var_label}") ///
+>         gaps replace substitute(\_ _)
+(output written to /Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Main Regression
+> /Tables/main_regression_fully_restricted_flats_differences.tex)
+
+. 
+end of do-file
+
+. do main_regression 0 0 0 0 1
+
+. local differenced = `1'
+
+. local restricted = `2'
+
+. local logs = `3'
+
+. local duplicate_registration = `4'
+
+. local flats = `5'
+
+. 
+. global INPUT "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_
+> VBP/Cleaning/Output"
+
+. global RESULTS "/Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Main Regression"
+
+. global TABLES "$RESULTS/Tables"
+
+. global FIGURES "$RESULTS/Figures"
+
+. 
+. // Select correct sample according to parameters
+. do select_sample `differenced' `restricted' `logs' `duplicate_registration' `
+> flats'
+
+. local differenced = `1'
+
+. local restricted = `2'
+
+. local logs = `3'
+
+. local duplicate_registration = `4'
+
+. local flats = `5'
+
+. 
+. di "differenced = `differenced'"
+differenced = 0
+
+. di "restricted = `restricted'"
+restricted = 0
+
+. di "logs = `logs'"
+logs = 0
+
+. 
+. global INPUT "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_
+> VBP/Cleaning/Output"
+
+. 
+. // Option 1: Run regression on differences (i.e. change in log price and chan
+> ge in interest rate)
+. if `differenced' {
+.         use "$INPUT/final_data.dta", clear
+.         
+.         global tag "differences"
+.         
+.         // We are not restricting the sample, so use all observations
+.         gen obs_to_use1 = 1
+.         gen obs_to_use2 = 1
+.         gen obs_to_use3 = 1
+.         gen obs_to_use4 = 1
+.         
+.         global bucket_name bucket_3_sale
+.         global bucket_11_name bucket_11_sale
+.         global dep_var d_log_price
+.         global indep_var d_interest_rate
+.         global indep_var_label "$\Delta$ Interest Rate"
+.         global fes `" "i.location_n##i.date_trans##i.L_date_trans" "i.locatio
+> n_n##i.date_trans##i.L_date_trans##i.type_n" "i.location_n##i.date_trans##i.L
+> _date_trans##i.price_quintile##i.type_n" "i.location_n##i.date_trans##i.L_dat
+> e_trans##i.type_n i.location_n##i.$bucket_name"  "'
+.         global cluster "date_trans L_date_trans location_n"
+.         global fe_vars "location_n date_trans L_date_trans type_n price_quint
+> ile"
+. }
+
+. 
+. // Option 2: Run regression on levels 
+. else {
+.         use "$INPUT/full_cleaned_data_with_lags.dta", clear
+.         global tag "levels"
+.         
+.         // We are also interested in recording results restricting the data s
+> et only to those observations that would be in the differences set
+.         if `restricted' {
+.                 global tag "restricted_$tag"
+.                 
+.                 // Drop properties with only one date or no registration info
+> rmation
+.                 drop if missing(L_date_trans)
+.                 
+.                 // Drop lease extensions
+.                 drop if leasehold & date_registered != L_date_registered
+.                 
+.                 // Generate useful data
+.                 cap drop bucket_3 price_quintile
+.                 xtile bucket_3 = lease_duration_at_trans, nq(2)
+.                 replace bucket_3 = 3 if !leasehold
+. 
+.                 xtile price_quintile = price, nq(5)
+.                 
+.                 // Generate keys for fixed effects
+.                 egen id1 = group(date_trans L_date_trans location_n)
+.                 duplicates tag id1, gen(dup1)
+.                 gen obs_to_use1 = 0 if dup1==0
+.                 replace obs_to_use1 = 1 if dup1 > 0
+.                 count if obs_to_use1
+.                 
+.                 egen id2 = group(date_trans L_date_trans location_n type_n)
+.                 duplicates tag id2, gen(dup2)
+.                 gen obs_to_use2 = 0 if dup2==0
+.                 replace obs_to_use2 = 1 if dup2 > 0
+.                 count if obs_to_use2
+.                 
+.                 egen id3 = group(date_trans L_date_trans location_n type_n pr
+> ice_quintile)
+.                 duplicates tag id3, gen(dup3)
+.                 gen obs_to_use3 = 0 if dup3==0
+.                 replace obs_to_use3 = 1 if dup3 > 0
+.                 count if obs_to_use3
+.                 
+.                 egen id4_1 = group(location_n bucket_3)
+.                 gen id4_2 = id2
+.                 duplicates tag id4_1, gen(dup4_1)
+.                 duplicates tag id4_2, gen(dup4_2)
+.                 gen obs_to_use4 = 0 if dup4_1==0 | dup4_2==0
+.                 replace obs_to_use4 = 1 if dup4_1 > 0 & dup4_2 > 0
+.                 count if obs_to_use4
+.         }
+.         
+.         else {
+.                 // Generate useful data
+.                 cap drop bucket_3 price_quintile
+.                 xtile bucket_3 = lease_duration_at_trans, nq(2)
+.                 replace bucket_3 = 3 if !leasehold
+(20,568,914 real changes made)
+. 
+.                 xtile price_quintile = price, nq(5)
+.                 
+.                 gen obs_to_use1 = 1
+.                 gen obs_to_use2 = 1
+.                 gen obs_to_use3 = 1
+.                 gen obs_to_use4 = 1
+.         }
+.         
+.         xtile bucket_11 = lease_duration_at_trans, nq(10)
+.         replace bucket_11 = 11 if !leasehold
+(20,568,914 real changes made)
+.         
+.         // Save relevant variable names
+.         global bucket_name bucket_3
+.         global bucket_11_name bucket_11
+.         global indep_var interest_rate
+.         global indep_var_label "Interest Rate"
+.         global fes `" "i.location_n##i.date_trans" "i.location_n##i.date_tran
+> ##i.type_n" "i.location_n##i.date_trans##i.price_quintile##i.type_n" "i.locat
+> ion_n##i.date_trans##i.type_n i.location_n##i.$bucket_name" "'
+.         global cluster "date_trans location_n"
+.         global fe_vars "location_n date_trans type_n price_quintile"
+.         
+.         // We want to look at the effect on both price and log_price
+.         if `logs' {
+.                 global tag "logs_$tag"
+.                 global dep_var log_price
+.         }
+.         else {
+.                 global dep_var price
+.         }
+. }
+
+. 
+. if `duplicate_registration' {
+.         drop if missing(number_years_missing)
+.         if `differences' {
+.                 drop if missing(L_number_years_missing)
+.         }
+.         global tag "missing_$tag"
+. }
+
+. 
+. if `flats' {
+.         drop if type != "F"
+(21,864,240 observations deleted)
+.         global tag "flats_$tag"
+. }
+
+. 
+. di "Tag: $tag"
+Tag: flats_levels
+
+. 
+end of do-file
+
+. 
+. di "Fixed effects:"
+Fixed effects:
+
+. di $fes
+i.location_n##i.date_transi.location_n##i.date_tran##i.type_ni.location_n##i.da
+> te_trans##i.price_quintile##i.type_ni.location_n##i.date_trans##i.type_n i.lo
+> cation_n##i.bucket_3
+
+. 
+. cap drop restricted_obs_to_use*
+
+. local count = 1
+
+. eststo clear 
+
+. foreach fe of global fes  {
+  2.         di "`fe'"
+  3.         di "reghdfe $dep_var i.$bucket_name##c.$indep_var, absorb(`fe') cl
+> uster($cluster)"
+  4.         eststo: reghdfe $dep_var i.$bucket_name##c.$indep_var if obs_to_us
+> e`count', absorb(`fe') cluster($cluster)
+  5.         gen restricted_obs_to_use_`count' = e(sample)
+  6.         local count = `count'+1
+  7. }
+i.location_n##i.date_trans
+reghdfe price i.bucket_3##c.interest_rate, absorb(i.location_n##i.date_trans) c
+> luster(date_trans location_n)
+(dropped 23390 singleton observations)
+note: interest_rate is probably collinear with the fixed effects (all partialle
+> d-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 1 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   =  3,913,131
+Absorbing 1 HDFE group                            F(   4,    109) =      51.95
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.4330
+                                                  Adj R-squared   =     0.4041
+Number of clusters (date_trans) =        110      Within R-sq.    =     0.0066
+Number of clusters (location_n) =      2,210      Root MSE        =  2.652e+05
+
+                (Std. err. adjusted for 110 clusters in date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+       price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    bucket_3 |
+          2  |   75574.64   7418.992    10.19   0.000     60870.43    90278.84
+          3  |   110434.2   8238.233    13.41   0.000      94106.3    126762.1
+             |
+interest_r~e |          0   8.28e-13     0.00   1.000    -1.64e-12    1.64e-12
+             |
+    bucket_3#|
+          c. |
+interest_r~e |
+          2  |  -9111.097   1107.608    -8.23   0.000    -11306.34   -6915.853
+          3  |  -12897.13   1259.862   -10.24   0.000    -15394.14   -10400.13
+             |
+       _cons |   186135.5   1657.758   112.28   0.000     182849.9    189421.2
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------------------+
+             Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------------------+---------------------------------------|
+   location_n#date_trans |    189615      189615           0    *|
+-----------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est1 stored)
+i.location_n##i.date_tran##i.type_n
+reghdfe price i.bucket_3##c.interest_rate, absorb(i.location_n##i.date_tran##i.
+> type_n) cluster(date_trans location_n)
+(dropped 23390 singleton observations)
+note: interest_rate is probably collinear with the fixed effects (all partialle
+> d-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 1 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   =  3,913,131
+Absorbing 1 HDFE group                            F(   4,    109) =      51.95
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.4330
+                                                  Adj R-squared   =     0.4041
+Number of clusters (date_trans) =        110      Within R-sq.    =     0.0066
+Number of clusters (location_n) =      2,210      Root MSE        =  2.652e+05
+
+                (Std. err. adjusted for 110 clusters in date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+       price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    bucket_3 |
+          2  |   75574.64   7418.992    10.19   0.000     60870.43    90278.84
+          3  |   110434.2   8238.233    13.41   0.000      94106.3    126762.1
+             |
+interest_r~e |          0   8.28e-13     0.00   1.000    -1.64e-12    1.64e-12
+             |
+    bucket_3#|
+          c. |
+interest_r~e |
+          2  |  -9111.097   1107.608    -8.23   0.000    -11306.34   -6915.853
+          3  |  -12897.13   1259.862   -10.24   0.000    -15394.14   -10400.13
+             |
+       _cons |   186135.5   1657.758   112.28   0.000     182849.9    189421.2
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+--------------------------------------------------------------------------+
+                      Absorbed FE | Categories  - Redundant  = Num. Coefs |
+----------------------------------+---------------------------------------|
+     location_n#date_trans#type_n |    189615      189615           0    *|
+--------------------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est2 stored)
+i.location_n##i.date_trans##i.price_quintile##i.type_n
+reghdfe price i.bucket_3##c.interest_rate, absorb(i.location_n##i.date_trans##i
+> .price_quintile##i.type_n) cluster(date_trans location_n)
+(dropped 144640 singleton observations)
+note: interest_rate is probably collinear with the fixed effects (all partialle
+> d-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 1 iterations)
+note: interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   =  3,791,881
+Absorbing 1 HDFE group                            F(   4,    109) =      19.50
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.4749
+                                                  Adj R-squared   =     0.4166
+Number of clusters (date_trans) =        110      Within R-sq.    =     0.0026
+Number of clusters (location_n) =      2,200      Root MSE        =  2.657e+05
+
+                (Std. err. adjusted for 110 clusters in date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+       price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    bucket_3 |
+          2  |   57209.95   8144.666     7.02   0.000     41067.49    73352.42
+          3  |   85345.06   10040.13     8.50   0.000     65445.86    105244.3
+             |
+interest_r~e |          0  (omitted)
+             |
+    bucket_3#|
+          c. |
+interest_r~e |
+          2  |   -9064.08   1389.731    -6.52   0.000    -11818.48   -6309.678
+          3  |  -12742.04   1638.769    -7.78   0.000    -15990.03   -9494.057
+             |
+       _cons |   195416.4   1528.061   127.89   0.000     192387.9      198445
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-------------------------------------------------------------------------------
+> ------------+
+                                       Absorbed FE | Categories  - Redundant  =
+>  Num. Coefs                                                                  
+>             |
+---------------------------------------------------+---------------------------
+> ------------|
+       location_n#date_trans#price_quintile#type_n |    379379      379379     
+>       0                                                                      
+>            *                                                                 
+>             |
+-------------------------------------------------------------------------------
+> ------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est3 stored)
+i.location_n##i.date_trans##i.type_n i.location_n##i.bucket_3
+reghdfe price i.bucket_3##c.interest_rate, absorb(i.location_n##i.date_trans##i
+> .type_n i.location_n##i.bucket_3) cluster(date_trans location_n)
+(dropped 23535 singleton observations)
+note: 2bn.bucket_3 is probably collinear with the fixed effects (all partialled
+> -out values are close to zero; tol = 1.0e-09)
+note: 3bn.bucket_3 is probably collinear with the fixed effects (all partialled
+> -out values are close to zero; tol = 1.0e-09)
+note: interest_rate is probably collinear with the fixed effects (all partialle
+> d-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 25 iterations)
+note: 2.bucket_3 omitted because of collinearity
+note: 3.bucket_3 omitted because of collinearity
+note: interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   =  3,912,986
+Absorbing 2 HDFE groups                           F(   2,    109) =      51.69
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.4443
+                                                  Adj R-squared   =     0.4150
+Number of clusters (date_trans) =        110      Within R-sq.    =     0.0013
+Number of clusters (location_n) =      2,203      Root MSE        =  2.627e+05
+
+                (Std. err. adjusted for 110 clusters in date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+       price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    bucket_3 |
+          2  |          0  (omitted)
+          3  |          0  (omitted)
+             |
+interest_r~e |          0  (omitted)
+             |
+    bucket_3#|
+          c. |
+interest_r~e |
+          2  |  -10442.31   1453.512    -7.18   0.000    -13323.12   -7561.497
+          3  |  -18381.05   1851.822    -9.93   0.000     -22051.3    -14710.8
+             |
+       _cons |   220162.1   1947.076   113.07   0.000       216303    224021.1
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+--------------------------------------------------------------------------+
+                      Absorbed FE | Categories  - Redundant  = Num. Coefs |
+----------------------------------+---------------------------------------|
+     location_n#date_trans#type_n |    189559      189559           0    *|
+              location_n#bucket_3 |      6369        6369           0    *|
+--------------------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est4 stored)
+
+. esttab using "$TABLES/main_regression_$tag.tex", ///
+>         se title("Baseline Regression Results \label{tab: main $tag}") ///
+>         keep(2.$bucket_name#c.$indep_var ///
+>                  3.$bucket_name#c.$indep_var) ///
+>         varlabels(2.$bucket_name#c.$indep_var "\multirow{2}{4cm}{High Duratio
+> n Leasehold x $indep_var_label}" ///
+>                           3.$bucket_name#c.$indep_var "\multirow{2}{4cm}{Free
+> hold x $indep_var_label}") ///
+>         gaps replace substitute(\_ _)
+(output written to /Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Main Regression
+> /Tables/main_regression_flats_levels.tex)
+
+. //      
+. // Repeat column 1 using observations from column 2
+. 
+. eststo clear
+
+. local fe1 : word 1 of $fes
+
+. di "First fixed effect: `fe1'"
+First fixed effect: i.location_n##i.date_trans
+
+. di "reghdfe $dep_var i.$bucket_name##c.$indep_var if restricted_obs_to_use, a
+> bsorb(`fe1') cluster($cluster)"
+reghdfe price i.bucket_3##c.interest_rate if restricted_obs_to_use, absorb(i.lo
+> cation_n##i.date_trans) cluster(date_trans location_n)
+
+. eststo: reghdfe $dep_var i.$bucket_name##c.$indep_var if restricted_obs_to_us
+> e_2, absorb(`fe1') cluster($cluster)
+note: interest_rate is probably collinear with the fixed effects (all partialle
+> d-out values are close to zero; tol = 1.0e-09)
+(MWFE estimator converged in 1 iterations)
+Warning: VCV matrix was non-positive semi-definite; adjustment from Cameron, Ge
+> lbach & Miller applied.
+note: interest_rate omitted because of collinearity
+
+HDFE Linear regression                            Number of obs   =  3,913,131
+Absorbing 1 HDFE group                            F(   4,    109) =      51.95
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.4330
+                                                  Adj R-squared   =     0.4041
+Number of clusters (date_trans) =        110      Within R-sq.    =     0.0066
+Number of clusters (location_n) =      2,210      Root MSE        =  2.652e+05
+
+                (Std. err. adjusted for 110 clusters in date_trans location_n)
+------------------------------------------------------------------------------
+             |               Robust
+       price | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+    bucket_3 |
+          2  |   75574.64   7418.992    10.19   0.000     60870.43    90278.84
+          3  |   110434.2   8238.233    13.41   0.000      94106.3    126762.1
+             |
+interest_r~e |          0   8.28e-13     0.00   1.000    -1.64e-12    1.64e-12
+             |
+    bucket_3#|
+          c. |
+interest_r~e |
+          2  |  -9111.097   1107.608    -8.23   0.000    -11306.34   -6915.853
+          3  |  -12897.13   1259.862   -10.24   0.000    -15394.14   -10400.13
+             |
+       _cons |   186135.5   1657.758   112.28   0.000     182849.9    189421.2
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------------------+
+             Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------------------+---------------------------------------|
+   location_n#date_trans |    189615      189615           0    *|
+-----------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est1 stored)
+
+. esttab using "$TABLES/main_regression_restricted_to_col_2_$tag.tex", ///
+>         se title("Baseline Regression Results, Without Singleton Observations
+>  \label{tab: main $tag restricted col2}") ///
+>         keep(2.$bucket_name#c.$indep_var ///
+>                  3.$bucket_name#c.$indep_var) ///
+>         varlabels(2.$bucket_name#c.$indep_var "\multirow{2}{4cm}{High Duratio
+> n Leasehold x $indep_var_label}" ///
+>                           3.$bucket_name#c.$indep_var "\multirow{2}{4cm}{Free
+> hold x $indep_var_label}") ///
+>         gaps replace substitute(\_ _)
+(output written to /Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Main Regression
+> /Tables/main_regression_restricted_to_col_2_flats_levels.tex)
+
+.         
+. // Repeat all using same observations for all columns
+. keep if restricted_obs_to_use_1 & restricted_obs_to_use_2 & restricted_obs_to
+> _use_3 & restricted_obs_to_use_4
+(144,718 observations deleted)
+
+. 
+. eststo clear 
+
+. foreach fe of local fes  {
+  2.         di "`fe'"
+  3.         di "reghdfe $dep_var i.$bucket_name##c.$indep_var, absorb(`fe') cl
+> uster($cluster)"
+  4.         eststo: reghdfe $dep_var i.$bucket_name##c.$indep_var, absorb(`fe'
+> ) cluster($cluster)
+  5. }
+
+. esttab using "$TABLES/main_regression_fully_restricted_$tag.tex", ///
+>         se title("Baseline Regression Results \label{tab: main $tag}") ///
+>         keep(2.$bucket_name#c.$indep_var ///
+>                  3.$bucket_name#c.$indep_var) ///
+>         varlabels(2.$bucket_name#c.$indep_var "\multirow{2}{4cm}{High Duratio
+> n Leasehold x $indep_var_label}" ///
+>                           3.$bucket_name#c.$indep_var "\multirow{2}{4cm}{Free
+> hold x $indep_var_label}") ///
+>         gaps replace substitute(\_ _)
+(output written to /Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Main Regression
+> /Tables/main_regression_fully_restricted_flats_levels.tex)
+
+. 
+end of do-file
+
+. 
+. do more_lease_variation 1 0 0 0 0
+
+. local differenced = `1'
+
+. local restricted = `2'
+
+. local logs = `3'
+
+. local duplicate_registration = `4'
+
+. local flats = `5'
+
+. 
+. global INPUT "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_
+> VBP/Cleaning/Output"
+
+. global RESULTS "/Users/vbp/Dropbox (Princeton)/Apps/Overleaf/More Lease Varia
+> tion"
+
+. 
+. global TABLES "$RESULTS/Tables"
+
+. global FIGURES "$RESULTS/Figures"
+
+. 
+. // Select correct sample according to parameters
+. do select_sample `differenced' `restricted' `logs' `duplicate_registration' `
+> flats'
+
+. local differenced = `1'
+
+. local restricted = `2'
+
+. local logs = `3'
+
+. local duplicate_registration = `4'
+
+. local flats = `5'
+
+. 
+. di "differenced = `differenced'"
+differenced = 1
+
+. di "restricted = `restricted'"
+restricted = 0
+
+. di "logs = `logs'"
+logs = 0
+
+. 
+. global INPUT "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_
+> VBP/Cleaning/Output"
+
+. 
+. // Option 1: Run regression on differences (i.e. change in log price and chan
+> ge in interest rate)
+. if `differenced' {
+.         use "$INPUT/final_data.dta", clear
+.         
+.         global tag "differences"
+.         
+.         // We are not restricting the sample, so use all observations
+.         gen obs_to_use1 = 1
+.         gen obs_to_use2 = 1
+.         gen obs_to_use3 = 1
+.         gen obs_to_use4 = 1
+.         
+.         global bucket_name bucket_3_sale
+.         global bucket_11_name bucket_11_sale
+.         global dep_var d_log_price
+.         global indep_var d_interest_rate
+.         global indep_var_label "$\Delta$ Interest Rate"
+.         global fes `" "i.location_n##i.date_trans##i.L_date_trans" "i.locatio
+> n_n##i.date_trans##i.L_date_trans##i.type_n" "i.location_n##i.date_trans##i.L
+> _date_trans##i.price_quintile##i.type_n" "i.location_n##i.date_trans##i.L_dat
+> e_trans##i.type_n i.location_n##i.$bucket_name"  "'
+.         global cluster "date_trans L_date_trans location_n"
+.         global fe_vars "location_n date_trans L_date_trans type_n price_quint
+> ile"
+. }
+
+. 
+. // Option 2: Run regression on levels 
+. else {
+.         use "$INPUT/full_cleaned_data_with_lags.dta", clear
+.         global tag "levels"
+.         
+.         // We are also interested in recording results restricting the data s
+> et only to those observations that would be in the differences set
+.         if `restricted' {
+.                 global tag "restricted_$tag"
+.                 
+.                 // Drop properties with only one date or no registration info
+> rmation
+.                 drop if missing(L_date_trans)
+.                 
+.                 // Drop lease extensions
+.                 drop if leasehold & date_registered != L_date_registered
+.                 
+.                 // Generate useful data
+.                 cap drop bucket_3 price_quintile
+.                 xtile bucket_3 = lease_duration_at_trans, nq(2)
+.                 replace bucket_3 = 3 if !leasehold
+. 
+.                 xtile price_quintile = price, nq(5)
+.                 
+.                 // Generate keys for fixed effects
+.                 egen id1 = group(date_trans L_date_trans location_n)
+.                 duplicates tag id1, gen(dup1)
+.                 gen obs_to_use1 = 0 if dup1==0
+.                 replace obs_to_use1 = 1 if dup1 > 0
+.                 count if obs_to_use1
+.                 
+.                 egen id2 = group(date_trans L_date_trans location_n type_n)
+.                 duplicates tag id2, gen(dup2)
+.                 gen obs_to_use2 = 0 if dup2==0
+.                 replace obs_to_use2 = 1 if dup2 > 0
+.                 count if obs_to_use2
+.                 
+.                 egen id3 = group(date_trans L_date_trans location_n type_n pr
+> ice_quintile)
+.                 duplicates tag id3, gen(dup3)
+.                 gen obs_to_use3 = 0 if dup3==0
+.                 replace obs_to_use3 = 1 if dup3 > 0
+.                 count if obs_to_use3
+.                 
+.                 egen id4_1 = group(location_n bucket_3)
+.                 gen id4_2 = id2
+.                 duplicates tag id4_1, gen(dup4_1)
+.                 duplicates tag id4_2, gen(dup4_2)
+.                 gen obs_to_use4 = 0 if dup4_1==0 | dup4_2==0
+.                 replace obs_to_use4 = 1 if dup4_1 > 0 & dup4_2 > 0
+.                 count if obs_to_use4
+.         }
+.         
+.         else {
+.                 // Generate useful data
+.                 cap drop bucket_3 price_quintile
+.                 xtile bucket_3 = lease_duration_at_trans, nq(2)
+.                 replace bucket_3 = 3 if !leasehold
+. 
+.                 xtile price_quintile = price, nq(5)
+.                 
+.                 gen obs_to_use1 = 1
+.                 gen obs_to_use2 = 1
+.                 gen obs_to_use3 = 1
+.                 gen obs_to_use4 = 1
+.         }
+.         
+.         xtile bucket_11 = lease_duration_at_trans, nq(10)
+.         replace bucket_11 = 11 if !leasehold
+.         
+.         // Save relevant variable names
+.         global bucket_name bucket_3
+.         global bucket_11_name bucket_11
+.         global indep_var interest_rate
+.         global indep_var_label "Interest Rate"
+.         global fes `" "i.location_n##i.date_trans" "i.location_n##i.date_tran
+> ##i.type_n" "i.location_n##i.date_trans##i.price_quintile##i.type_n" "i.locat
+> ion_n##i.date_trans##i.type_n i.location_n##i.$bucket_name" "'
+.         global cluster "date_trans location_n"
+.         global fe_vars "location_n date_trans type_n price_quintile"
+.         
+.         // We want to look at the effect on both price and log_price
+.         if `logs' {
+.                 global tag "logs_$tag"
+.                 global dep_var log_price
+.         }
+.         else {
+.                 global dep_var price
+.         }
+. }
+
+. 
+. if `duplicate_registration' {
+.         drop if missing(number_years_missing)
+.         if `differences' {
+.                 drop if missing(L_number_years_missing)
+.         }
+.         global tag "missing_$tag"
+. }
+
+. 
+. if `flats' {
+.         drop if type != "F"
+.         global tag "flats_$tag"
+. }
+
+. 
+. di "Tag: $tag"
+Tag: differences
+
+. 
+end of do-file
+
+. 
+. di "Fixed effects:"
+Fixed effects:
+
+. di $fes
+i.location_n##i.date_trans##i.L_date_transi.location_n##i.date_trans##i.L_date_
+> trans##i.type_ni.location_n##i.date_trans##i.L_date_trans##i.price_quintile##
+> i.type_ni.location_n##i.date_trans##i.L_date_trans##i.type_n i.location_n##i.
+> bucket_3_sale
+
+. 
+. /////////////////////////////////////////////////////
+> // Create histogram of lease duration
+. /////////////////////////////////////////////////////
+> // twoway histogram lease_duration_at_trans if leasehold & lease_duration_at_
+> trans <= 1000
+. // graph export "$FIGURES/duration_histogram_$tag.png", replace
+. 
+. // Do everything on first and second regression
+. 
+. local count=0
+
+. foreach fe of global fes  {
+  2.         
+.         local count = `count'+1
+  3.         di "`fe'"
+  4.         di "$tag"
+  5.         
+.         // Skip lasted column of main table because it takes too long
+.         if `count'==4 {
+  6.                 continue
+  7.         }
+  8. 
+.         /////////////////////////////////////////////////////
+>         // Split data by 100-year duration blocks 
+.         /////////////////////////////////////////////////////
+>         cap drop bucket
+  9.         gen bucket = .
+ 10.         forvalues i=0(100)900 {
+ 11.                 replace bucket = (`i'+100)/100 if lease_duration_at_trans 
+> > `i' & lease_duration_at_trans <= `i'+100
+ 12.         }
+ 13.         replace bucket=11 if leasehold & lease_duration_at_trans > 1000
+ 14.         replace bucket=12 if !leasehold
+ 15. 
+. 
+.         // Summary stats
+.         eststo clear
+ 16.         estpost tabstat lease_duration_at_trans, by(bucket) statistics(mea
+> n count) columns(statistics) listwise
+ 17.         esttab using "$TABLES/summary_100_year_blocks_$tag.tex", cells("me
+> an count") nonumber nostar unstack label noobs nonote title("Stats By Year of
+>  Purchase \label{tab: summary 100 year blocks $tag}") varlabels(1 "0-100" 2 "
+> 100-200" 3 "200-300" 4 "300-400" 5 "400-500" 6 "500-600" 7 "600-700" 8 "700-8
+> 00" 9 "800-900" 10 "900-1000" 11 "1000+" 12 "Freehold") replace substitute(\_
+>  _)
+ 18. 
+.         local bucket_name bucket
+ 19. 
+.         eststo clear 
+ 20.         eststo: reghdfe $dep_var i.`bucket_name'##c.$indep_var if obs_to_u
+> se`count', absorb(`fe') cluster($cluster)
+ 21. 
+.         esttab using "$TABLES/main_regression_separated_by_100_year_blocks_$t
+> ag.tex", ///
+>                 se title("Regression Results by 100 Year Lease Duration Block
+> s \label{tab: regression 100 year blocks $tag}") ///
+>                 keep(2.`bucket_name'#c.$indep_var ///
+>                 3.`bucket_name'#c.$indep_var ///
+>                 4.`bucket_name'#c.$indep_var ///
+>                 5.`bucket_name'#c.$indep_var ///
+>                 6.`bucket_name'#c.$indep_var ///
+>                 7.`bucket_name'#c.$indep_var ///
+>                 8.`bucket_name'#c.$indep_var ///
+>                 9.`bucket_name'#c.$indep_var ///
+>                 10.`bucket_name'#c.$indep_var ///
+>                 11.`bucket_name'#c.$indep_var ///
+>                 12.`bucket_name'#c.$indep_var) ///
+>                 varlabels( ///
+>                 2.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{100-200 Years
+>  x $indep_var_label}" ///
+>                 3.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{200-300 Years
+>  x $indep_var_label}" ///
+>                 4.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{300-400 Years
+>  x $indep_var_label}" ///
+>                 5.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{400-500 Years
+>  x $indep_var_label}" ///
+>                 6.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{500-600 Years
+>  x $indep_var_label}" ///
+>                 7.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{600-700 Years
+>  x $indep_var_label}" ///
+>                 8.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{700-800 Years
+>  x $indep_var_label}" ///
+>                 9.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{800-900 Years
+>  x $indep_var_label}" ///
+>                 10.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{900-1000 Yea
+> rs x $indep_var_label}" ///
+>                 11.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{1000+ Years 
+> x $indep_var_label}" ///
+>                 12.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{Freehold x $
+> indep_var_label}") ///
+>                 gaps replace substitute(\_ _)
+ 22. 
+.         cap drop xaxis coeff sd ub lb
+ 23.         gen xaxis = _n if _n <= 12
+ 24.         gen coeff = .
+ 25.         gen sd = .
+ 26. 
+.         local bucket_name bucket
+ 27.         forvalues n = 2/12 {
+ 28.                 replace coeff = _b[`n'.`bucket_name'#c.$indep_var] if _n =
+> = `n'
+ 29.                 replace sd = _se[`n'.`bucket_name'#c.$indep_var] if _n == 
+> `n'
+ 30.         }
+ 31. 
+.         gen lb = coeff - 1.96*sd
+ 32.         gen ub = coeff + 1.96*sd
+ 33. 
+.         twoway (rarea ub lb xaxis) (line coeff xaxis), xlabel(2 "100-200" 3 "
+> 200-300" 4 "300-400" 5 "400-500" 6 "500-600" 7 "600-700" 8 "700-800" 9 "800-9
+> 00" 10 "900-1000" 11 "1000+" 12 "Freehold", angle(45)) yline(0)
+ 34.         graph export "$FIGURES/100_year_bucket_results_fe`count'_$tag.png"
+> , replace
+ 35. 
+.         /////////////////////////////////////////////////////
+>         // Split data into more specific blocks
+.         /////////////////////////////////////////////////////
+> 
+. 
+.         // 1
+.         cap drop bucket 
+ 36.         gen bucket = 1 if leasehold & lease_duration_at_trans > 0 & lease_
+> duration_at_trans <= 100
+ 37.         replace bucket = 2 if leasehold & lease_duration_at_trans > 100 & 
+> lease_duration_at_trans <= 500
+ 38.         replace bucket = 3 if leasehold & lease_duration_at_trans > 500 & 
+> lease_duration_at_trans <= 1000
+ 39.         replace bucket = 4 if (leasehold & lease_duration_at_trans > 1000)
+>  | !leasehold
+ 40. 
+.         local bucket_name bucket
+ 41. 
+.         eststo clear 
+ 42.         eststo: reghdfe $dep_var i.`bucket_name'##c.$indep_var if obs_to_u
+> se`count', absorb(`fe') cluster($cluster)
+ 43. 
+.         esttab using "$TABLES/results_by_bucket1_fe`count'_$tag.tex", ///
+>                 se title("Regression Results by 100 Year Lease Duration Block
+> s \label{tab: regression 100 year blocks fe`count'_$tag}") ///
+>                 keep(2.`bucket_name'#c.$indep_var ///
+>                 3.`bucket_name'#c.$indep_var ///
+>                 4.`bucket_name'#c.$indep_var) ///
+>                 varlabels( ///
+>                 2.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{100-500 Years
+>  x }" ///
+>                 3.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{500-1000 Year
+> s x `interest_rate_label'}" ///
+>                 4.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{1000+ and Fre
+> ehoolds x `interest_rate_label'}") ///
+>                 gaps replace substitute(\_ _)
+ 44. 
+.         cap drop xaxis coeff sd ub lb
+ 45.         gen xaxis = _n if _n > 1 & _n <= 4
+ 46.         gen coeff = .
+ 47.         gen sd = .
+ 48. 
+.         local bucket_name bucket
+ 49.         forvalues n = 2/4 {
+ 50.                 replace coeff = _b[`n'.`bucket_name'#c.$indep_var] if _n =
+> = `n'
+ 51.                 replace sd = _se[`n'.`bucket_name'#c.$indep_var] if _n == 
+> `n'
+ 52.         }
+ 53. 
+.         gen lb = coeff - 1.96*sd
+ 54.         gen ub = coeff + 1.96*sd
+ 55. 
+.         twoway (rarea ub lb xaxis) (line coeff xaxis), xlabel(2 "100-500" 3 "
+> 500-1000" 4 "1000+ & Freehold", angle(45)) yline(0)
+ 56.         graph export "$FIGURES/results_by_bucket1_fe`count'_$tag.png", rep
+> lace
+ 57. 
+.         // Focus on long leases
+.         cap drop bucket 
+ 58.         gen bucket = 1 if leasehold & lease_duration_at_trans > 0 & lease_
+> duration_at_trans <= 100
+ 59.         replace bucket = 2 if leasehold & lease_duration_at_trans > 100 & 
+> lease_duration_at_trans <= 200
+ 60.         replace bucket = 3 if leasehold & lease_duration_at_trans > 200 & 
+> lease_duration_at_trans <= 900
+ 61.         replace bucket = 4 if leasehold & lease_duration_at_trans > 900 & 
+> lease_duration_at_trans <= 970
+ 62.         replace bucket = 5 if leasehold & lease_duration_at_trans > 970 & 
+> lease_duration_at_trans <= 980
+ 63.         replace bucket = 6 if leasehold & lease_duration_at_trans > 980 & 
+> lease_duration_at_trans <= 990
+ 64.         replace bucket = 7 if leasehold & lease_duration_at_trans > 990 & 
+> lease_duration_at_trans <= 1000
+ 65.         replace bucket = 8 if (leasehold & lease_duration_at_trans > 1000)
+>  | !leasehold
+ 66. 
+.         // Summary stats
+.         eststo clear
+ 67.         estpost tabstat lease_duration_at_trans $dep_var $indep_var, by(bu
+> cket) statistics(mean sd) columns(statistics) listwise
+ 68.         esttab using "$TABLES/summary_long_leases_$tag.tex", main(mean) au
+> x(sd) nonumber nostar unstack label noobs nonote title("Stats By Year of Purc
+> hase \label{tab: summary focus on long leases $tag}") varlabels(1 "0-100" 2 "
+> 100-200" 3 "200-900" 4 "900-970" 5 " 970-980" 6 "980-990" 7 "990-1000" 8 "100
+> 0+") replace substitute(\_ _)
+ 69. 
+.         local bucket_name bucket
+ 70. 
+.         eststo clear 
+ 71.         eststo: reghdfe $dep_var i.`bucket_name'##c.$indep_var if obs_to_u
+> se`count', absorb(`fe') cluster($cluster)
+ 72. 
+.         esttab using "$TABLES/results_long_leases_fe`count'_$tag.tex", ///
+>                 se title("Regression Results, Focusing on Long Leases \label{
+> tab: regression focus on long leases fe`count'_$tag}") ///
+>                 keep(2.`bucket_name'#c.$indep_var ///
+>                 3.`bucket_name'#c.$indep_var ///
+>                 4.`bucket_name'#c.$indep_var ///
+>                 5.`bucket_name'#c.$indep_var ///
+>                 6.`bucket_name'#c.$indep_var ///
+>                 7.`bucket_name'#c.$indep_var ///
+>                 8.`bucket_name'#c.$indep_var) ///
+>                 varlabels( ///
+>                 2.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{100-200 Years
+>  x $indep_var_label}" ///
+>                 3.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{200-900 Years
+>  x $indep_var_label}" ///
+>                 4.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{900-950 Years
+>  x $indep_var_label}" ///
+>                 5.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{950-970 Years
+>  x $indep_var_label}" ///
+>                 6.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{970-990 Years
+>  x $indep_var_label}" ///
+>                 7.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{990-1000 Year
+> s x $indep_var_label}" ///
+>                 8.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{1000+ and Fre
+> ehoolds x $indep_var_label}") ///
+>                 gaps replace substitute(\_ _)
+ 73. 
+.         cap drop xaxis coeff sd ub lb
+ 74.         gen xaxis = _n if _n > 1 & _n <= 8
+ 75.         gen coeff = .
+ 76.         gen sd = .
+ 77. 
+.         local bucket_name bucket
+ 78.         forvalues n = 2/8 {
+ 79.                 replace coeff = _b[`n'.`bucket_name'#c.$indep_var] if _n =
+> = `n'
+ 80.                 replace sd = _se[`n'.`bucket_name'#c.$indep_var] if _n == 
+> `n'
+ 81.         }
+ 82. 
+.         gen lb = coeff - 1.96*sd
+ 83.         gen ub = coeff + 1.96*sd
+ 84. 
+.         twoway (rarea ub lb xaxis) (line coeff xaxis), xlabel(2 "100-200" 3 "
+> 200-900" 4 "900-970" 5 " 970-980" 6 "980-990" 7 "990-1000" 8 "1000+ & Freehol
+> d", angle(45)) yline(0)
+ 85.         graph export "$FIGURES/results_long_leases_fe`count'_$tag.png", re
+> place
+ 86. 
+. 
+.         // Focus on short leases
+.         cap drop bucket 
+ 87.         gen bucket = 1 if leasehold & lease_duration_at_trans > 0 & lease_
+> duration_at_trans <= 70
+ 88.         replace bucket = 2 if leasehold & lease_duration_at_trans > 70 & l
+> ease_duration_at_trans <= 80
+ 89.         replace bucket = 3 if leasehold & lease_duration_at_trans > 80 & l
+> ease_duration_at_trans <= 90
+ 90.         replace bucket = 4 if leasehold & lease_duration_at_trans > 90 & l
+> ease_duration_at_trans <= 100
+ 91.         replace bucket = 5 if leasehold & lease_duration_at_trans > 100 & 
+> lease_duration_at_trans <= 110
+ 92.         replace bucket = 6 if leasehold & lease_duration_at_trans > 110 & 
+> lease_duration_at_trans <= 120
+ 93.         replace bucket = 7 if leasehold & lease_duration_at_trans > 120 & 
+> lease_duration_at_trans <= 150
+ 94.         replace bucket = 8 if leasehold & lease_duration_at_trans > 150 & 
+> lease_duration_at_trans <= 1000
+ 95.         replace bucket = 9 if (leasehold & lease_duration_at_trans > 1000)
+>  | !leasehold
+ 96. 
+.         // Summary stats
+.         eststo clear
+ 97.         estpost tabstat lease_duration_at_trans $dep_var $indep_var, by(bu
+> cket) statistics(mean sd) columns(statistics) listwise
+ 98.         esttab using "$TABLES/summary_short_leases.tex", main(mean) aux(sd
+> ) nonumber nostar unstack label noobs nonote title("Stats By Year of Purchase
+>  \label{tab: summary focus on short leases fe`count'_$tag}") varlabels(1 "0-7
+> 0" 2 "70-80" 3 "80-90" 4 "90-100" 5 " 100-110" 6 "110-120" 7 "120-150" 8 "150
+> -1000" 9 "1000+") replace substitute(\_ _)
+ 99. 
+.         local bucket_name bucket
+100. 
+.         eststo clear 
+101.         eststo: reghdfe $dep_var i.`bucket_name'##c.$indep_var if obs_to_u
+> se`count', absorb(`fe') cluster($cluster)
+102. 
+.         esttab using "$TABLES/results_short_leases_fe`count'_$tag.tex", ///
+>                 se title("Regression Results, Focusing on Short Leases \label
+> {tab: regression focus on short leases fe`count'_$tag}") ///
+>                 keep(2.`bucket_name'#c.$indep_var ///
+>                 3.`bucket_name'#c.$indep_var ///
+>                 4.`bucket_name'#c.$indep_var ///
+>                 5.`bucket_name'#c.$indep_var ///
+>                 6.`bucket_name'#c.$indep_var ///
+>                 7.`bucket_name'#c.$indep_var ///
+>                 8.`bucket_name'#c.$indep_var) ///
+>                 varlabels( ///
+>                 2.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{70-80 Years x
+>  $indep_var_label}" ///
+>                 3.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{80-90 Years x
+>  $indep_var_label}" ///
+>                 4.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{90-100 Years 
+> x $indep_var_label}" ///
+>                 5.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{100-110 Years
+>  x $indep_var_label}" ///
+>                 6.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{110-120 Years
+>  x $indep_var_label}" ///
+>                 7.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{120-150 Years
+>  x $indep_var_label}" ///
+>                 8.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{150-1000 x $i
+> ndep_var_label}" ///
+>                 9.`bucket_name'#c.$indep_var "\multirow{2}{4cm}{1000+ and Fre
+> ehoolds x $indep_var_label}") ///
+>                 gaps replace substitute(\_ _)
+103. 
+.         cap drop xaxis coeff sd ub lb
+104.         gen xaxis = _n if _n > 1 & _n <= 9
+105.         gen coeff = .
+106.         gen sd = .
+107. 
+.         local bucket_name bucket
+108.         forvalues n = 2/9 {
+109.                 replace coeff = _b[`n'.`bucket_name'#c.$indep_var] if _n =
+> = `n'
+110.                 replace sd = _se[`n'.`bucket_name'#c.$indep_var] if _n == 
+> `n'
+111.         }
+112. 
+.         gen lb = coeff - 1.96*sd
+113.         gen ub = coeff + 1.96*sd
+114. 
+.         twoway (rarea ub lb xaxis) (line coeff xaxis), xlabel(2 "70-80" 3 "80
+> -90" 4 "90-100" 5 " 100-110" 6 "110-120" 7 "120-150" 8 "150-1000" 9 "1000+ & 
+> Freehold", angle(45)) yline(0)
+115.         graph export "$FIGURES/results_short_leases_fe`count'_$tag.png", r
+> eplace
+116. 
+.         /////////////////////////////////////////////////////
+>         // Split Data by Deciles:
+.         /////////////////////////////////////////////////////
+> 
+.         local bucket_name $bucket_11_name
+117. 
+.         eststo clear 
+118.         quietly eststo: reghdfe $dep_var i.`bucket_name'##c.$indep_var if 
+> obs_to_use`count', absorb(`fe') cluster($cluster)
+119. 
+.         esttab using "$TABLES/main_regression_`bucket_name'_separating_extend
+> ed_leases_fe`count'_$tag.tex", ///
+>                 se title("Baseline Regression Results, Including Extended Lea
+> ses, 5 Lease Buckets \label{tab: bucket 11 $tag}") ///
+>                 keep( ///
+>                 2.`bucket_name'#c.$indep_var ///
+>                 3.`bucket_name'#c.$indep_var ///
+>                 4.`bucket_name'#c.$indep_var ///
+>                 5.`bucket_name'#c.$indep_var ///
+>                 6.`bucket_name'#c.$indep_var ///
+>                 7.`bucket_name'#c.$indep_var ///
+>                 8.`bucket_name'#c.$indep_var ///
+>                 9.`bucket_name'#c.$indep_var ///
+>                 10.`bucket_name'#c.$indep_var ///
+>                 11.`bucket_name'#c.$indep_var) ///
+>                 varlabels( ///
+>                 2.`bucket_name'#c.$indep_var "\multirow{2}{6cm}{Leasehold 2 x
+>  $indep_var_label}"  ///
+>                 3.`bucket_name'#c.$indep_var "\multirow{2}{6cm}{Leasehold 3 x
+>  $indep_var_label}"  ///
+>                 4.`bucket_name'#c.$indep_var "\multirow{2}{6cm}{Leasehold 4 x
+>  $indep_var_label}"  ///
+>                 5.`bucket_name'#c.$indep_var "\multirow{2}{6cm}{Leasehold 5 x
+>  $indep_var_label}"  ///
+>                 6.`bucket_name'#c.$indep_var "\multirow{2}{6cm}{Leasehold 6 x
+>  $indep_var_label}"  ///
+>                 7.`bucket_name'#c.$indep_var "\multirow{2}{6cm}{Leasehold 7 x
+>  $indep_var_label}"  ///
+>                 8.`bucket_name'#c.$indep_var "\multirow{2}{6cm}{Leasehold 8 x
+>  $indep_var_label}"  ///
+>                 9.`bucket_name'#c.$indep_var "\multirow{2}{6cm}{Leasehold 9 x
+>  $indep_var_label}" ///
+>                 10.`bucket_name'#c.$indep_var "\multirow{2}{6cm}{Leasehold 10
+>  x $indep_var_label}" ///
+>                 11.`bucket_name'#c.$indep_var "\multirow{2}{6cm}{Freehold x $
+> indep_var_label}") gaps replace substitute(\_ _)
+120. 
+.         // Plot results
+.         cap drop xaxis coeff sd ub lb
+121.         gen xaxis = _n if _n <= 12
+122.         gen coeff = .
+123.         gen sd = .
+124. 
+.         forvalues n = 2/11 {
+125.                 replace coeff = _b[`n'.`bucket_name'#c.$indep_var] if _n =
+> = `n'
+126.                 replace sd = _se[`n'.`bucket_name'#c.$indep_var] if _n == 
+> `n'
+127.         }
+128. 
+.         gen lb = coeff - 1.96*sd
+129.         gen ub = coeff + 1.96*sd
+130. 
+.         twoway (rarea ub lb xaxis) (line coeff xaxis), xlabel(2 "2" 3 "3" 4 "
+> 4" 5 "5" 6 "6" 7 "7" 8 "8" 9 "9" 10 "10" 11 "Freehold", angle(45)) yline(0)
+131.         graph export "$FIGURES/bucket_11_regression_results_fe`count'_$tag
+> .png", replace
+132. 
+. }
+i.location_n##i.date_trans##i.L_date_trans
+differences
