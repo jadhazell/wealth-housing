@@ -44,4 +44,30 @@ gen quarter = quarter(date)
 // Aggregate at quarter level
 collapse (mean) interest_rate cloyne_hurtgen_cum cesa_bianchi_cum, by(year quarter)
 
+// Generate leads/lags
+gen rate_date = year + (quarter-1)/4
+replace rate_date = rate_date*4
+tsset rate_date
+
+gen d_rate = D.interest_rate
+
+sort rate_date
+forvalues i = 1/8 {
+	gen L`i'_d_interest_rate = L`i'.d_rate
+}
+
+forvalues i = 2/8 {
+	gen F`i'_d_interest_rate = F`i'.d_rate
+}
+
+forvalues i = 1/8 {
+	gen L`i'_interest_rate = L`i'.interest_rate
+}
+
+forvalues i = 2/8 {
+	gen F`i'_interest_rate = F`i'.interest_rate
+}
+
+drop d_rate rate_date
+
 save "$WORKING/interest_rates.dta", replace

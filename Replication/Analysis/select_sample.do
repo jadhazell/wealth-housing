@@ -71,14 +71,20 @@ if `differenced' {
 	gen obs_to_use2 = 1
 	gen obs_to_use3 = 1
 	gen obs_to_use4 = 1
+	gen obs_to_use5 = 1
 	
-	global bucket_name bucket_3_sale
+	global bucket_name bucket_3_restricted
 	global bucket_11_name bucket_11_sale
 	global indep_var d_interest_rate
 	global indep_var_label "$\Delta$ Interest Rate"
 	global fes `" "i.location_n##i.date_trans##i.L_date_trans" "i.location_n##i.date_trans##i.L_date_trans##i.type_n" "i.location_n##i.date_trans##i.L_date_trans##i.price_quintile##i.type_n" "i.location_n##i.date_trans##i.L_date_trans##i.type_n i.location_n##i.$bucket_name"  "'
 	global cluster "date_trans L_date_trans location_n"
 	global fe_vars "location_n date_trans L_date_trans type_n price_quintile"
+	
+	global iv_var d_cesa_bianchi
+	global iv_var_label "$\Delta$ Monetary Shock"
+	
+	global title "Differences"
 	
 	// We want to look at the effect on both price and log_price
 	if `logs' {
@@ -96,20 +102,13 @@ if `differenced' {
 else {
 	// We are also interested in recording results restricting the data set only to those observations that would be in the differences set
 	if `restricted' {
-		global tag "restricted_$tag"
+		global tag "restrictedobs_$tag"
 		
 		// Drop properties with only one date or no registration information
 		drop if missing(L_date_trans)
 		
 		// Drop lease extensions
 		drop if leasehold & date_registered != L_date_registered
-		
-		// Generate useful data
-		cap drop bucket_3 price_quintile
-		xtile bucket_3 = lease_duration_at_trans, nq(2)
-		replace bucket_3 = 3 if !leasehold
-
-		xtile price_quintile = price, nq(5)
 		
 		// Generate keys for fixed effects
 		egen id1 = group(date_trans L_date_trans location_n)
@@ -124,46 +123,49 @@ else {
 		replace obs_to_use2 = 1 if dup2 > 0
 		count if obs_to_use2
 		
-		egen id3 = group(date_trans L_date_trans location_n type_n price_quintile)
+		egen id3 = group(date_trans L_date_trans location_n type_n price_quintile_restricted)
 		duplicates tag id3, gen(dup3)
 		gen obs_to_use3 = 0 if dup3==0
 		replace obs_to_use3 = 1 if dup3 > 0
 		count if obs_to_use3
 		
-		egen id4_1 = group(location_n bucket_3)
+		egen id4_1 = group(location_n bucket_3_restricted)
 		gen id4_2 = id2
 		duplicates tag id4_1, gen(dup4_1)
 		duplicates tag id4_2, gen(dup4_2)
 		gen obs_to_use4 = 0 if dup4_1==0 | dup4_2==0
 		replace obs_to_use4 = 1 if dup4_1 > 0 & dup4_2 > 0
 		count if obs_to_use4
+		
+		gen obs_to_use5 = obs_to_use2
+		
+		
+		global bucket_name bucket_3_restricted
 	}
 	
 	else {
-		// Generate useful data
-		cap drop bucket_3 price_quintile
-		xtile bucket_3 = lease_duration_at_trans, nq(2)
-		replace bucket_3 = 3 if !leasehold
-
-		xtile price_quintile = price, nq(5)
 		
 		gen obs_to_use1 = 1
 		gen obs_to_use2 = 1
 		gen obs_to_use3 = 1
 		gen obs_to_use4 = 1
+		gen obs_to_use5 = 1
+		
+		global bucket_name bucket_3
 	}
 	
-	xtile bucket_11 = lease_duration_at_trans, nq(10)
-	replace bucket_11 = 11 if !leasehold
-	
 	// Save relevant variable names
-	global bucket_name bucket_3
 	global bucket_11_name bucket_11
 	global indep_var interest_rate
 	global indep_var_label "Interest Rate"
-	global fes `" "i.location_n##i.date_trans" "i.location_n##i.date_tran##i.type_n" "i.location_n##i.date_trans##i.price_quintile##i.type_n" "i.location_n##i.date_trans##i.type_n i.location_n##i.$bucket_name" "'
+	global fes `" "i.location_n##i.date_trans" "i.location_n##i.date_trans##i.type_n"  "i.location_n##i.date_trans##i.price_quintile##i.type_n" "i.location_n##i.date_trans##i.type_n i.location_n##i.$bucket_name" "i.location_n##i.date_trans##i.type_n i.property_id_n" "'
 	global cluster "date_trans location_n"
 	global fe_vars "location_n date_trans type_n price_quintile"
+	
+	global iv_var cesa_bianchi_cum
+	global iv_var_label "Monetary Shock"
+	
+	global title "Levels"
 	
 	// We want to look at the effect on both price and log_price
 	if `logs' {
@@ -172,6 +174,7 @@ else {
 		global dep_var_label "log(price)"
 	}
 	else {
+		global tag "no_logs_$tag"
 		global dep_var price
 		global dep_var_label "price"
 	}
@@ -181,6 +184,27 @@ if `windsor' {
 	global win "_win"
 	global dep_var "$dep_var$win"
 	global tag "winsor_$tag"
+}
+
+// Merge in leads and lags 
+if `differenced'{
+	cap drop _merge
+	merge m:1 date_trans using "$WORKING/interest_rates_leads.dta"
+	keep if _merge==3
+	cap drop _merge
+	merge m:1 L_date_trans using "$WORKING/interest_rates_lags.dta"
+	keep if _merge==3
+	cap drop _merge
+}
+
+else{
+	cap drop _merge
+	merge m:1 date_trans using "$WORKING/interest_rates_leads.dta"
+	keep if _merge==3
+	cap drop _merge
+	merge m:1 date_trans using "$WORKING/interest_rates_lags.dta"
+	keep if _merge==3
+	cap drop _merge
 }
 
 di "==================================================="

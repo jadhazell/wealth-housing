@@ -15,7 +15,7 @@ global TABLES "$RESULTS/Tables"
 global FIGURES "$RESULTS/Figures"
 
 // Select correct sample according to parameters
-do select_sample `differenced' `restricted' `logs' `duplicate_registration' `flats' `windsor' `under_80' `below_median_price' `above_median_price'
+do select_sample `differenced' `restricted' `logs' `duplicate_registration' `flats' `windsor' `under_80' `post_2004' `below_median_price' `above_median_price'
 
 //////////////////////////////////////////////////////////
 // For the differenced regression, we can include
@@ -102,6 +102,7 @@ else {
 	local datevar date_trans
 	local fe2 : word 2 of $fes
 
+	eststo clear
 	foreach l of numlist 1995(5)2020 {
 		quietly eststo: reghdfe $dep_var i.$bucket_name##c.$indep_var if `datevar' >= `l' & `datevar' < `l'+5 & obs_to_use2, absorb(`fe2') cluster($cluster) 
 	}
@@ -120,7 +121,10 @@ else {
 	di "$tag"
 
 	// Run regressions on year blocks + store results to plot
-	cap drop time lh* fh*
+	
+	local datevar date_trans
+	cap drop time 
+	cap drop lh* fh*
 	gen time = 1995 if _n==1
 	replace time = time[_n-1] + 5 if _n > 1 & _n < 7
 		
@@ -133,14 +137,19 @@ else {
 	
 	foreach l of numlist 1995(5)2020 {
 		di "$bucket_name"
-		di "`var'"
 		di "`l'"
 		di " "
 		
 		eststo clear 
 		local count = 1
-		foreach fe of local fes {
-			eststo: reghdfe $dep_var i.$bucket_name##c.$indep_var if `datevar' >= `l' & `datevar' < `l'+5 & obs_to_use2, absorb(`fe') cluster($cluster)
+		foreach fe of global fes {
+			
+			if `count' > 3 {
+				continue
+			}
+			
+			di "Fixed effect: `fe'"
+			eststo: reghdfe $dep_var i.$bucket_name##c.$indep_var if `datevar' >= `l' & `datevar' < `l'+5 & obs_to_use`count', absorb(`fe') cluster($cluster)
 			replace lh_`count' =  _b[2.$bucket_name#c.$indep_var] if time==`l'
 			replace fh_`count' =  _b[3.$bucket_name#c.$indep_var] if time==`l'
 			local count = `count'+1
@@ -161,28 +170,31 @@ else {
 	set scheme plotplainblind
 	cap drop xaxis
 	cap drop lh* fh*
-	gen xaxis = 0 if _n==1
-	replace xaxis = xaxis[_n-1] + 1 if _n > 1 & _n < 10
+	gen xaxis = _n if _n <= 5
 		
 	local count = 1
-	foreach fe of local fes {
+	foreach fe of global fes {
 		cap gen lh_`count' = .
 		cap gen fh_`count' = .
 		local count = `count'+1
 	}
+	
+	xtile interest_rate_quintiles = interest_rate, nq(5)
 
-	foreach l of numlist 0(1)8 {
+	forvalues l = 1/5 {
 		di "$bucket_name"
-		di "`datevar'"
 		di "`l'"
 		di " "
 		
-		sum `datevar' if `datevar' >= `l' & `datevar' < `l'+1
-		
 		eststo clear 
 		local count = 1
-		foreach fe of local fes {
-			eststo: reghdfe $dep_var i.$bucket_name##c.$indep_var if `datevar' >= `l' & `datevar' < `l'+1 & obs_to_use2, absorb(`fe') cluster($cluster)
+		foreach fe of global fes {
+			
+			if `count' > 3{
+				continue
+			}
+			
+			eststo: reghdfe $dep_var i.$bucket_name##c.$indep_var if interest_rate_quintiles==`l' & obs_to_use`count', absorb(`fe') cluster($cluster)
 			replace lh_`count' =  _b[2.$bucket_name#c.$indep_var] if xaxis==`l'
 			replace fh_`count' =  _b[3.$bucket_name#c.$indep_var] if xaxis==`l'
 			local count = `count'+1

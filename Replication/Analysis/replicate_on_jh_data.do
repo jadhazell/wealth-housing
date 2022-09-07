@@ -7,23 +7,22 @@ rename L_new_term L_lease_duration_at_trans
 rename date date_trans
 rename L_date L_date_trans
 rename d_rate d_interest_rate
+rename property_type type
 
-encode location, gen(location_n)
-encode property_type, gen(type_n)
+egen location_n = group(location)
+egen type_n = group(property_type)
+egen postcode_n = group(postcode)
 
 gen leasehold = duration == "L"
+gen years_held = date_trans - L_date_trans
 
-drop if leasehold & missing(lease_duration_at_trans)
-drop if leasehold & missing(L_lease_duration_at_trans)
+// drop if leasehold & missing(lease_duration_at_trans)
+// drop if leasehold & missing(L_lease_duration_at_trans)
 
-xtile bucket_3_sale = lease_duration_at_trans, nq(2)
-replace bucket_3_sale = 3 if !leasehold
+xtile bucket_3 = L_lease_duration_at_trans, nq(2)
+replace bucket_3 = 3 if !leasehold
 
-xtile bucket_3_purchase = L_lease_duration_at_trans, nq(2)
-replace bucket_3_purchase = 3 if !leasehold
-
-xtile bucket_6_sale = lease_duration_at_trans, nq(5)
-replace bucket_6_sale = 6 if !leasehold
+save "$WORKING/jad_quarterly_data.dta", replace
 
 
 // Snowballing
