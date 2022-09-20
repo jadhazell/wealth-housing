@@ -3,16 +3,15 @@ global RESULTS "/Users/vbp/Dropbox (Princeton)/Apps/Overleaf/GMS Replication"
 global TABLES "$RESULTS/Tables"
 global FIGURES "$RESULTS/Figures"
 
+local basetag "_hedonic"
+global controls "i.new_n i.total_floor_area_50tiles i.number_habitable_rooms_n i.mainheat_description_n i.construction_age_band_n"
+
 forvalues count = 1/8 {
 	
-	use "$INPUT/full_cleaned_data_with_lags.dta", clear
+	use "$INPUT/full_cleaned_data_with_lags`basetag'.dta", clear
 	
 	gen number_years_before_renewal = L_number_years - (date_registered - L_date_registered)
 	gen extension_amt = number_years - number_years_before_renewal
-	
-	if !(`count'==5 | `count'==8) {
-		continue
-	}
 	
 	// Select sample
 	// (1) Exact replication
@@ -79,11 +78,11 @@ forvalues count = 1/8 {
 	}
 	
 	// Histograms
-	histogram lease_duration_at_trans if lease_duration_at_trans > 0 & lease_duration_at_trans <= 300, width(5) frequency
-	graph export "$FIGURES/histogram_short_leases_`tag'.png", replace
-	
-	histogram lease_duration_at_trans if lease_duration_at_trans > 700 & lease_duration_at_trans <= 1000, width(5) frequency
-	graph export "$FIGURES/histogram_long_leases_`tag'.png", replace
+// 	histogram lease_duration_at_trans if lease_duration_at_trans > 0 & lease_duration_at_trans <= 300, width(5) frequency
+// 	graph export "$FIGURES/histogram_short_leases`basetag'_`tag'.png", replace
+//	
+// 	histogram lease_duration_at_trans if lease_duration_at_trans > 700 & lease_duration_at_trans <= 1000, width(5) frequency
+// 	graph export "$FIGURES/histogram_long_leases`basetag'_`tag'.png", replace
 	
 	// Regression
 	
@@ -101,7 +100,8 @@ forvalues count = 1/8 {
 	replace maturity_group = 4 if leasehold & lease_duration_at_trans >= 125 & lease_duration_at_trans < 150
 	replace maturity_group = 5 if leasehold & lease_duration_at_trans >= 150 & lease_duration_at_trans < 300
 	replace maturity_group = 6 if leasehold & lease_duration_at_trans >= 700
-	
+
+	// First without controls
 	reghdfe log_price i.maturity_group, absorb(i.location_n##i.date_trans)
 	
 	forvalues i=2/6 {
@@ -118,8 +118,34 @@ forvalues count = 1/8 {
 		local first_label "0-99"
 	}
 	
-	graph twoway (bar coeff xaxis) (rcap ub lb xaxis), xlabel(2 "`first_label'" 3 "100-124" 4 "125-149" 5 "150-300" 6 "700+") ylabel(0(-0.05)-0.3) legend(off)
-	graph export "$FIGURES/regression_results_`tag'.png", replace
+	graph twoway (bar coeff xaxis) (rcap ub lb xaxis), xlabel(2 "`first_label'" 3 "100-124" 4 "125-149" 5 "150-300" 6 "700+") legend(off)
+	graph export "$FIGURES/regression_results`basetag'_`tag'.png", replace
 	
-	
+	// Next, with controls
+	if !missing("$controls") {
+		cap drop xaxis coeff sd ub lb
+		
+		gen xaxis = _n+1 if _n <=5
+		gen coeff = .
+		gen sd = .
+		
+		reghdfe log_price i.maturity_group $controls, absorb(i.location_n##i.date_trans)
+		
+		forvalues i=2/6 {
+			replace coeff = _b[`i'.maturity_group] if xaxis == `i'
+			replace sd = _se[`i'.maturity_group] if xaxis == `i'
+		}
+		
+		gen ub = coeff + 1.96*sd
+		gen lb = coeff - 1.96*sd
+		
+		local first_label "80-99"
+		
+		if `count' == 7 {
+			local first_label "0-99"
+		}
+		
+		graph twoway (bar coeff xaxis) (rcap ub lb xaxis), xlabel(2 "`first_label'" 3 "100-124" 4 "125-149" 5 "150-300" 6 "700+") legend(off)
+		graph export "$FIGURES/regression_results_controls`basetag'_`tag'.png", replace	
+	}
 }

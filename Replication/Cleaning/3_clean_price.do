@@ -104,6 +104,13 @@ drop if dup_duration > 0
 
 save "$WORKING/full_price_data.dta", replace
 
+use "$WORKING/full_price_data.dta", clear
+preserve
+	gsort property_id -street -locality -city // Prioritize data that is not missing
+	duplicates drop property_id, force
+	save "$WORKING/full_price_data_unique.dta", replace
+restore
+
 
 preserve
 	keep if duration == "F"

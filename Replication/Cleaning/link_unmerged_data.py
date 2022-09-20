@@ -7,17 +7,24 @@ from tqdm import tqdm
 from Property import Property
 from utilities import * 
 
-def identify_and_write_matches(data_directory, divided_data_directory, division_level="postcode", verbose=False):
+def identify_and_write_matches(data_directory, divided_data_directory, division_level="postcode", verbose=False, lease_file_name = "unmerged_lease_data.dta", price_file_name = "unmerged_price_data.dta", output_file_name=""):
 	new_matches = [["merge_key","property_id"]]
 
-	print("Starting search... :)")
+	num_price = 0
+	num_lease = 0
+
+	print("Starting search")
 	for i, area in enumerate(tqdm(sorted(os.listdir(divided_data_directory)))):
+
+		# print("=============================")
+		# print(area)
+		# print("=============================")
 		
 		area_directory = os.path.join(divided_data_directory, area)
 
-		if os.path.isdir(area_directory) and len(os.listdir(area_directory)) == 2:
-			lease_file = os.path.join(divided_data_directory, area, "lease_properties.p")
-			price_file = os.path.join(divided_data_directory, area, "price_properties.p")
+		if os.path.isdir(area_directory) and len(os.listdir(area_directory)) == 2 and lease_file_name in os.listdir(area_directory) and price_file_name in os.listdir(area_directory):
+			lease_file = os.path.join(divided_data_directory, area, lease_file_name)
+			price_file = os.path.join(divided_data_directory, area, price_file_name)
 
 			with open(lease_file, "rb") as f:
 				leases = pickle.load(f)
@@ -27,7 +34,13 @@ def identify_and_write_matches(data_directory, divided_data_directory, division_
 
 			if verbose:
 				print(f"\n\n\n{area}\n===================\n")
+
+			num_price += len(prices)
+			num_lease += len(leases)
+
 			for prop2 in prices:
+
+				matched = False
 
 				# For the SELSEY COUNTRY CLUB LITTLE SPAIN, the order of the secondary number is flipped in the price data. Manually fix it.
 				if prop2.street_number == "SELSEY COUNTRY CLUB LITTLE SPAIN":
@@ -61,15 +74,19 @@ def identify_and_write_matches(data_directory, divided_data_directory, division_
 						match_key = prop1_not_cleaned.replace(".","").replace("'","").replace(",", "")
 						new_matches.append([match_key, prop2.property_id])
 
-	print("Number of matches:", len(new_matches))
+						matched = True
+				if not matched:
+					print(f"Was not able to match {prop2.address}")
 
-	if division_level == "postcode":
-		output_file = os.path.join(data_directory, "matched_with_python.csv")
-	elif division_level == "city":
-		output_file = os.path.join(data_directory, "no_postcode_matched_with_python.csv")
-	with open(output_file, "w") as f:
-		writer = csv.writer(f)
-		writer.writerows(new_matches)
+	print(f"Total number of price data points: {num_price}")
+	print(f"Total number of lease data points: {num_lease}")
+
+	# print("Number of matches:", len(new_matches))
+
+	# output_file = os.path.join(data_directory, output_file_name)
+	# with open(output_file, "w") as f:
+	# 	writer = csv.writer(f)
+	# 	writer.writerows(new_matches)
 
 if __name__ == "__main__":
 	error_msg = 'The first argument specifies whether the data ought to be divided at the postcode or city level. Please have the first argument be either "postcode" to divide the data at the postcode level or "city" to divide the data at the city level.\nThe second argument specifies the path to the stata working directory.\nThe third argument specifies the path to the python working directory.\nSample commandline input: python3 extract_unmerged_data.py postcode "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_VBP/Cleaning/Working/stata_working" "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_VBP/Cleaning/Working/python_working".'
@@ -79,10 +96,17 @@ if __name__ == "__main__":
 		print(error_msg)
 		sys.exit(1)
 
-	else:
-		division_level = sys.argv[1]
-		stata_directory = sys.argv[2].replace('"','')
-		python_directory = sys.argv[3].replace('"','')
+	division_level = sys.argv[1]
+	stata_directory = sys.argv[2].replace('"','')
+	python_directory = sys.argv[3].replace('"','')
+
+	flags = ["-lease_file", "-price_file", "-output_file"]
+	optional_arguments = ["lease_properties.p", "price_properties.p", "matched_with_python.csv"]
+
+	# Get any optional arguments
+	for i, flag in enumerate(flags):
+		if flag in sys.argv:
+			optional_arguments[i] = sys.argv[sys.argv.index(flag) + 1]
 
 	if division_level not in ["postcode", "city"] or not os.path.isdir(stata_directory) or not os.path.isdir(python_directory):
 		print("One of the arguments you entered was not valid.")
@@ -100,5 +124,5 @@ if __name__ == "__main__":
 	else:
 		verbose = False
 
-	identify_and_write_matches(stata_directory, divided_data_directory, division_level=division_level, verbose=verbose)
+	identify_and_write_matches(stata_directory, divided_data_directory, division_level=division_level, verbose=verbose, lease_file_name = optional_arguments[0], price_file_name = optional_arguments[1], output_file_name = optional_arguments[2])
 

@@ -14,6 +14,7 @@ di "restricted = `restricted'"
 di "logs = `logs'"
 
 global INPUT "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_VBP/Cleaning/Output"
+global WORKING "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_VBP/Cleaning/Working/stata_working"
 
 // First: select data file
 if `differenced' {
@@ -73,8 +74,8 @@ if `differenced' {
 	gen obs_to_use4 = 1
 	gen obs_to_use5 = 1
 	
-	global bucket_name bucket_3_restricted
-	global bucket_11_name bucket_11_sale
+	global bucket_name bucket_3
+	global bucket_11_name bucket_11
 	global indep_var d_interest_rate
 	global indep_var_label "$\Delta$ Interest Rate"
 	global fes `" "i.location_n##i.date_trans##i.L_date_trans" "i.location_n##i.date_trans##i.L_date_trans##i.type_n" "i.location_n##i.date_trans##i.L_date_trans##i.price_quintile##i.type_n" "i.location_n##i.date_trans##i.L_date_trans##i.type_n i.location_n##i.$bucket_name"  "'
@@ -184,27 +185,6 @@ if `windsor' {
 	global win "_win"
 	global dep_var "$dep_var$win"
 	global tag "winsor_$tag"
-}
-
-// Merge in leads and lags 
-if `differenced'{
-	cap drop _merge
-	merge m:1 date_trans using "$WORKING/interest_rates_leads.dta"
-	keep if _merge==3
-	cap drop _merge
-	merge m:1 L_date_trans using "$WORKING/interest_rates_lags.dta"
-	keep if _merge==3
-	cap drop _merge
-}
-
-else{
-	cap drop _merge
-	merge m:1 date_trans using "$WORKING/interest_rates_leads.dta"
-	keep if _merge==3
-	cap drop _merge
-	merge m:1 date_trans using "$WORKING/interest_rates_lags.dta"
-	keep if _merge==3
-	cap drop _merge
 }
 
 di "==================================================="

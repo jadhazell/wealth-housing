@@ -60,14 +60,31 @@ forvalues i = 2/8 {
 	gen F`i'_d_interest_rate = F`i'.d_rate
 }
 
-forvalues i = 1/8 {
+forvalues i = 1/110 {
 	gen L`i'_interest_rate = L`i'.interest_rate
+	gen DL`i'_interest_rate = interest_rate - L`i'.interest_rate
+	drop  L`i'.interest_rate
 }
 
-forvalues i = 2/8 {
+forvalues i = 1/110 {
 	gen F`i'_interest_rate = F`i'.interest_rate
+	gen DF`i'_interest_rate = F`i'.interest_rate - interest_rate
+	drop  F`i'.interest_rate
 }
 
 drop d_rate rate_date
 
 save "$WORKING/interest_rates.dta", replace
+
+* Generate leads and lags
+
+use "$WORKING/interest_rates.dta", clear
+keep year quarter L*
+gen L_date_trans = year + (quarter-1)/4
+gen date_trans = L_date_trans
+save "$WORKING/interest_rates_lags.dta", replace
+
+use "$WORKING/interest_rates.dta", clear
+keep year quarter F*
+gen date_trans = year + (quarter-1)/4
+save "$WORKING/interest_rates_leads.dta", replace

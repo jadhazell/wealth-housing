@@ -2,6 +2,7 @@ import subprocess
 import os 
 import re 
 import sys
+import pandas as pd
 
 def run_stata(script, input_folder="", output_folder=""):
 	'''
@@ -44,6 +45,25 @@ def run_python(script, *args):
 	print(f"\n\n\n\nRunning {' '.join(cmd)}")
 	subprocess.call(cmd)
 
+def convert_encoding(bad_text):
+	ret_txt = ''
+	for item in str(bad_text):
+		item = item
+		ret_txt += item if len(item.encode(encoding='utf_8')) == 1 else ''
+	return ret_txt
+
+def append_files(folder_path, file_name, working_folder):
+
+	all_filenames = [os.path.join(folder_path, folder, file_name) for folder in os.listdir(folder_path) if os.path.isdir(os.path.join(folder_path, folder))]
+	combined_csv = pd.concat([pd.read_csv(f) for f in all_filenames ])
+	combined_csv[['ADDRESS1', 'ADDRESS2', 'ADDRESS3', 'POSTCODE']] = combined_csv[['ADDRESS1', 'ADDRESS2', 'ADDRESS3', 'POSTCODE']].fillna('')
+	combined_csv = combined_csv.astype(str)
+	combined_csv["description"] = combined_csv["ADDRESS1"] + " " + combined_csv["ADDRESS2"] + " " + combined_csv["ADDRESS3"] + " " + combined_csv["POSTCODE"]
+	combined_csv.to_csv(os.path.join(working_folder, "combined_characteristic_files.csv"), index=False, encoding='utf-8-sig')
+	# print("Output to stata:")
+	# combined_csv.to_stata(os.path.join(working_folder, "combined_characteristic_files.dta"), version=118)
+
+
 #####################################################################
 # RUN ALL CLEANING PROGRAMS IN ORDER
 #####################################################################
@@ -64,6 +84,7 @@ if __name__ == "__main__":
 	input_folder = os.path.join(main_dir, "Input")
 	housing_data_folder = os.path.join(input_folder, "gov_uk")
 	interest_rate_data_folder = os.path.join(input_folder, "interest_rates")
+	hedonic_data_folder = os.path.join(input_folder, "characteristics")
 
 	# Working data
 	working_folder = os.path.join(main_dir, "Working")
@@ -87,12 +108,20 @@ if __name__ == "__main__":
 	# run_stata("6_merge_python_results_postcodes.do", input_folder=stata_working_folder)
 	# run_python("extract_unmerged_data.py", "city", stata_working_folder, python_working_folder)
 	# run_python("link_unmerged_data.py", "city", stata_working_folder, python_working_folder)
+
+	# Merge hedonic characteristics with price data
+	# append_files(hedonic_data_folder, "certificates.csv", stata_working_folder)
+	run_python("extract_unmerged_data.py", "postcode", stata_working_folder, python_working_folder, "-price_file", "full_price_data_unique.dta", "-lease_file","combined_characteristic_files.csv", "-output_lease_file", "headonic_characteristic_properties.p", "-run_lease", "F")
+	#run_python("link_unmerged_data.py", "postcode", stata_working_folder, python_working_folder, "-lease_file","headonic_characteristic_properties.p", "-output_file", "matched_hedonic_characteristics.csv", "-v")
+	#run_python("link_unmerged_data.py", "postcode", stata_working_folder, python_working_folder, "-lease_file","headonic_characteristic_properties.p", "-output_file", "matched_hedonic_characteristics.csv")
+
+
 	# run_stata("7_merge_python_results_no_postcodes.do", input_folder=stata_working_folder)
 	# run_stata("8_merge_all_data.do", input_folder=stata_working_folder)
-	run_stata("9_finalize_data.do", input_folder=stata_working_folder, output_folder=output_folder)
+	# run_stata("9_finalize_data.do", input_folder=stata_working_folder, output_folder=output_folder)
 
-	os.chdir(analysis_directory)
-	run_stata("rundirectory.do")
+	# os.chdir(analysis_directory)
+	# run_stata("rundirectory.do")
 	# run_stata("lease_extensions.do")
 	# run_stata("more_lease_variation.do")
 

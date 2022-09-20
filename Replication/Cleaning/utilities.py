@@ -2,7 +2,7 @@ def clean_number(text):
 	return clean(text).replace("THE","").replace("FLAT","").replace("APARTMENT","").strip()
 
 def clean(text):
-	return text.replace(".","").replace(",","").replace(" - ","-").replace("'","").strip()
+	return text.replace(".","").replace(",","").replace(" - ","-").replace("'","").strip().upper()
 
 def get_embedded_number(text):
 	if not text.isnumeric():

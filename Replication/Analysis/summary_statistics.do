@@ -1,5 +1,7 @@
 global INPUT "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_VBP/Cleaning/Output"
-global RESULTS "/Users/vbp/Dropbox (Princeton)/Apps/Overleaf/Summary Statistics"
+global RESULTS "/Users/vbp/Dropbox (Princeton)/Apps/Overleaf/UK Duration"
+global TABLES "$RESULTS/Tables/Summary Stats"
+global FIGURES "$RESULTS/Figures/Summary Stats"
 
 use "$INPUT/final_data.dta", clear
 
@@ -73,3 +75,15 @@ eststo clear
 cap gen mean_d_price = d_log_price/years_held
 estpost tabstat mean_d_price, by(bucket_3_sale) statistics(mean sd)
 esttab using "$RESULTS/change_in_price_by_duration.tex", main(mean) aux(sd) nostar unstack nonumber label title("Average change in log price (normalized by years held) by duration") replace
+
+
+* Change in log price by price level
+binscatter2 d_log_price L_price, xtitle("Purchase Price") ytitle("Δ log(Price)")
+graph export "$FIGURES/d_log_price_by_L_price_scatter.png", replace
+
+
+binscatter2 d_log_price price, xtitle("Sale Price") ytitle("Δ log(Price)")
+graph export "$FIGURES/d_log_price_by_price_scatter.png", replace
+
+binscatter2 d_log_price log_price, xtitle("log(Sale Price)") ytitle("Δ log(Price)")
+graph export "$FIGURES/d_log_price_by_log_price_scatter.png", replace
