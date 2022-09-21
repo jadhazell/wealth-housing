@@ -1,7 +1,7 @@
 global WORKING "`1'"
 global OUTPUT "`2'"
 
-global tag "_hedonic"
+// global tag "_hedonic"
 global tag ""
 
 di "Working folder: $WORKING"
@@ -9,66 +9,74 @@ di "Output folder: $OUTPUT"
 
 use "$WORKING/full_merged_data.dta", clear
 
-////////////////////////////////////////////
-// Generate useful variables
-////////////////////////////////////////////
+* Merge with interest rate data
+cap drop _merge
+merge m:1 year quarter using "$WORKING/interest_rates.dta"
+keep if _merge==3
+drop _merge
 
-// Calculate information about lease term at each date
-// Record lease term at time of transactions
+if "$tag" == "_hedonic" {
+	* Merge with hedonic characteristics
+	cap drop _merge
+	merge 1:1 property_id date_trans using  "$WORKING/matched_hedonic_characteristics_by_year.dta"
+	drop _merge
+}
+	
+save "$OUTPUT/full_data$tag.dta", replace
+																																  
+********************************************
+* Generate useful variables
+********************************************
+
+* Leasehold indicator
+gen leasehold = (duration == "L")
+gen freehold = !leasehold
+
+* Calculate information about lease term at each date
+* Record lease term at time of transactions
 gen years_elapsed_at_trans = date_trans - date_registered
 gen lease_duration_at_trans = number_years - years_elapsed_at_trans
 
-// Leasehold indicator
-gen leasehold = (duration == "L")
+* Give freeholds a duration so that they are counted
+replace lease_duration_at_trans = 0 if freehold
+* Normalize duration to be in 1000s of years
+replace lease_duration_at_trans = lease_duration_at_trans/1000
 
-// Isolate first component of postcode
+* Isolate first component of postcode
 gen pos_empty   = strpos(postcode," ")
 gen location      = substr(postcode,1,pos_empty)
 replace location  = trim(location)
 drop pos_empty
 drop if missing(location)
 
-// Make string factor variables numeric
+* Make string factor variables numeric
 egen location_n = group(location)
 egen type_n = group(type)
 egen postcode_n = group(postcode)
 egen property_id_n = group(property_id)
 egen new_n = group(new)
+egen district_n = group(district)
+egen city_n = group(city)
+gen flat = type == "F" 
 
-// Winsorize price
+* Winsorize price
 winsor price, p(0.01) gen(price_win)
 
-// Gen log price 
+* Gen log price 
 gen log_price = log(price)
 gen log_price_win = log(price_win)
 
-// // Get lease duration centiles
-// xtile duration_centiles = lease_duration_at_trans, nq(100)
+* Create price quintile information by year 
+egen price_quintile_yearly=xtile(price), n(5) by(date_trans)
 
-// Merge with interest rate data
-cap drop _merge
-merge m:1 year quarter using "$WORKING/interest_rates.dta"
-keep if _merge==3
-drop _merge
+********************************************
+* Drop missing and incoherent data
+********************************************
 
-// Merge with hedonic characteristics
-cap drop _merge
-merge 1:1 property_id date_trans using  "$WORKING/matched_hedonic_characteristics_by_year.dta"
-drop _merge
-
-save "$OUTPUT/full_data.dta", replace
-																	   
-// Drop unnecessary variables:
-drop diff_from_mean_years diff_from_mean_from unique_id v16 property_id_mp property_id_mp2 dup_price dup_type dup_new dup_duration  lmk_key address1 address2 address3 floor_energy_eff floor_env_eff sheating_energy_eff sheating_env_eff  unheated_corridor_length address local_authority_label constituency_label posttown  fixed_lighting_outlets_count  low_energy_fixed_light_count  v93
-																																  
-////////////////////////////////////////////
-// Drop missing and incoherent data
-////////////////////////////////////////////
-
-// Drop leaseholds with no lease length information 
+* Drop leaseholds with no lease length information 
 drop if leasehold & missing(date_registered)
 
-// Drop if property changes from leasehold to freehold at some point
+* Drop if property changes from leasehold to freehold at some point
 duplicates tag property_id, gen(dup_pid)
 duplicates tag property_id duration, gen(dup_pid_dur)
 
@@ -79,18 +87,18 @@ drop if switches_duration
 
 drop dup* switches_duration no_match
 
-// Drop if remaining lease duration is zero or negative
+* Drop if remaining lease duration is zero or negative
 drop if lease_duration_at_trans <= 0
 
 save "$OUTPUT/full_cleaned_data$tag.dta", replace
 
-////////////////////////////////////////////////////////////////////////////
-// We are primarily interested in the change in price between transactions
-// Generate logs of variables and collapse observations by date purchase/date sale
-////////////////////////////////////////////////////////////////////////////
+**************************************
+* We are primarily interested in the change in price between transactions
+* Generate logs of variables and collapse observations by date purchase/date sale
+**************************************
 use "$OUTPUT/full_cleaned_data$tag.dta", clear
 
-//Generate lagged variables
+*Generate lagged variables
 sort property_id date_trans
 by property_id: gen L_date_trans = date_trans[_n-1]
 by property_id: gen L_price = price[_n-1]
@@ -103,13 +111,15 @@ by property_id: gen L_number_years = number_years[_n-1]
 by property_id: gen L_number_years_missing = number_years_missing[_n-1]
 by property_id: gen L_number_years_partial_missing = number_years_partial_missing[_n-1]
 by property_id: gen L_cesa_bianchi_cum = cesa_bianchi_cum[_n-1]
-by property_id: gen L_cloyne_hurtgen_cum = cloyne_hurtgen_cum[_n-1]														   
+by property_id: gen L_cloyne_hurtgen_cum = cloyne_hurtgen_cum[_n-1]		
+by property_id: gen L_price_quintile_yearly = price_quintile_yearly[_n-1]														   
+by property_id: gen L_year = year[_n-1]	
 																  
-// Tag data for which the lease was extended half way through the ownership
+* Tag data for which the lease was extended half way through the ownership
 gen lease_was_extended = 0
 replace lease_was_extended = 1 if leasehold & !missing(L_date_registered) & date_registered != L_date_registered
 
-// Generate differenced variables
+* Generate differenced variables
 gen d_price = price - L_price
 gen d_log_price = 100*(log(price) - log(L_price))
 
@@ -126,11 +136,11 @@ gen d_cesa_bianchi = cesa_bianchi_cum - L_cesa_bianchi_cum
 save "$OUTPUT/full_cleaned_data_with_lags_and_extensions$tag.dta", replace
 drop if lease_was_extended
 
-//////////////////////////////////////////////////////////
-// Classify data into percentiles:
-/////////////////////////////////////////////////////////////
+*****************************
+* Classify data into percentiles:
+******************************/
 
-// Generate x_tiles of purchase price 
+* Generate x_tiles of purchase price 
 xtile price_quintile = L_price, nq(5) 
 xtile price_quintile_sale = price, nq(5) 
 xtile price_ventile = L_price, nq(20)
@@ -144,7 +154,7 @@ replace bucket_6 = 3 if !leasehold
 xtile bucket_11 = lease_duration_at_trans, nq(11)
 replace bucket_11 = 11 if !leasehold
 
-// Classify data into five year periods (based on purchase data, sale date, and halfway point)
+* Classify data into five year periods (based on purchase data, sale date, and halfway point)
 gen purchase = L_date_trans
 gen sale = date_trans
 gen half_way = (purchase + sale)/2
@@ -172,7 +182,7 @@ replace bucket_11_restricted = 11 if !leasehold & !missing(L_date_trans)
 
 save "$OUTPUT/full_cleaned_data_with_lags$tag.dta", replace
 
-// Keep only observations that record change over time (this will delete all properties for which we only have on observation)
+* Keep only observations that record change over time (this will delete all properties for which we only have on observation)
 drop if missing(L_date_trans)
 
 drop bucket_3 bucket_6 bucket_11 price_quintile price_quintile_sale price_ventile

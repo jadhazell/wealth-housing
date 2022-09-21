@@ -1,15 +1,28 @@
-local differenced = `1'
-local restricted = `2'
-local logs = `3'
-local duplicate_registration = `4'
-local flats = `5'
-local windsor = `6'
-local under_80 = `7'
-local post_2004 = `8'
-local below_median_price = `9'
-local above_median_price = `10'
 
-do select_sample `differenced' `restricted' `logs' `duplicate_registration' `flats' `windsor' `under_80' `post_2004' `below_median_price' `above_median_price'
+* Get parameters
+local differenced = 1
+local logs = 1
+local restricted = 0
+local drop_under_80 = 1
+
+if !missing(`"`1'"') {
+	local differenced = `1'
+}
+
+if !missing(`"`2'"') {
+	local logs = `2'
+}
+
+if !missing(`"`3'"') {
+	local differenced = `3'
+}
+
+if !missing(`"`4'"') {
+	local differenced = `4'
+}
+
+* Get data
+do select_sample `differenced' `logs' `restricted' `drop_under_80'
 
 // Merge in leads and lags 
 if `differenced'{

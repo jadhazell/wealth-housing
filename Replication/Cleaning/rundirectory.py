@@ -98,16 +98,16 @@ if __name__ == "__main__":
 	print("Wait for the message 'DONE' to show up. The Stata dofile run in the background so it might seem like the program is finished when it isn't")
 
 
-	# run_stata("1_set_presets.do", input_folder=input_folder, output_folder=output_folder)
-	# run_stata("2_clean_lease.do", input_folder=housing_data_folder, output_folder=stata_working_folder)
-	# run_stata("3_clean_price.do", input_folder=housing_data_folder, output_folder=stata_working_folder)
-	# run_stata("4_clean_interest_rates.do", input_folder=interest_rate_data_folder, output_folder=stata_working_folder)
-	# run_stata("5_merge_on_merge_keys.do", input_folder=stata_working_folder)
-	# run_python("extract_unmerged_data.py", "postcode", stata_working_folder, python_working_folder)
-	# run_python("link_unmerged_data.py", "postcode", stata_working_folder, python_working_folder)
-	# run_stata("6_merge_python_results_postcodes.do", input_folder=stata_working_folder)
-	# run_python("extract_unmerged_data.py", "city", stata_working_folder, python_working_folder)
-	# run_python("link_unmerged_data.py", "city", stata_working_folder, python_working_folder)
+	run_stata("1_set_presets.do", input_folder=input_folder, output_folder=output_folder)
+	run_stata("2_clean_lease.do", input_folder=housing_data_folder, output_folder=stata_working_folder)
+	run_stata("3_clean_price.do", input_folder=housing_data_folder, output_folder=stata_working_folder)
+	run_stata("4_clean_interest_rates.do", input_folder=interest_rate_data_folder, output_folder=stata_working_folder)
+	run_stata("5_merge_on_merge_keys.do", input_folder=stata_working_folder)
+	run_python("extract_unmerged_data.py", "postcode", stata_working_folder, python_working_folder)
+	run_python("link_unmerged_data.py", "postcode", stata_working_folder, python_working_folder)
+	run_stata("6_merge_python_results_postcodes.do", input_folder=stata_working_folder)
+	run_python("extract_unmerged_data.py", "city", stata_working_folder, python_working_folder)
+	run_python("link_unmerged_data.py", "city", stata_working_folder, python_working_folder)
 
 	# Merge hedonic characteristics with price data
 	# append_files(hedonic_data_folder, "certificates.csv", stata_working_folder)
