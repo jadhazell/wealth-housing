@@ -67,7 +67,8 @@ gen log_price = log(price)
 gen log_price_win = log(price_win)
 
 * Create price quintile information by year 
-egen price_quintile_yearly=xtile(price), n(5) by(date_trans)
+egen price_quint_group=xtile(price), n(5) by(date_trans district_n)
+egen price_dec_group=xtile(price), n(10) by(date_trans district_n)
 
 ********************************************
 * Drop missing and incoherent data

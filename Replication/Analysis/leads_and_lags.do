@@ -165,3 +165,7 @@ foreach fe of global fes  {
 			  3.$bucket_name#c.F2_$indep_var "\multirow{2}{4cm}{Freehold x Lead $indep_var_label}") ///
 	mlabels("$dep_var_label" "$dep_var_label" "$dep_var_label") gaps replace substitute(\_ _) ///
 }
+
+
+* Use transaction leads/lags 
+

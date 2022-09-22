@@ -35,111 +35,81 @@ global FIGURES "$RESULTS/Figures/Main Regression"
 
 * Run main specification for multiple fixed effect choices:
 
-cap drop restricted_obs_to_use*
-local count = 1
-eststo clear
-foreach fe of global fes  {
-	eststo: reghdfe $dep_var c.lease_duration_at_trans##c.$indep_var i.freehold##c.$indep_var if obs_to_use`count', absorb(`fe') cluster($cluster)
-	estadd local fe`count' "$\checkmark$" , replace
+gen obs_to_use = 1
+global restriction ""
+
+forvalues i = 1/3 {
 	
-	* Keep track of sample that was used for each regression
-	gen restricted_obs_to_use_`count' = e(sample)
-	local count = `count' + 1
+	* Run first on all data, then only flats, then only non flats
+	if `i' == 2 {
+		replace obs_to_use = 1 if type == "F"
+		replace obs_to_use = 0 if type != "F"
+		global restriction "_only_flats"
+	}
+	if `i' == 2 {
+		replace obs_to_use = 1 if type != "F"
+		replace obs_to_use = 0 if type == "F"
+		global restriction "_only_nonflats"
+	}
+
+	local count = 1
+	eststo clear
+	foreach fe of global fes  {
+		eststo: reghdfe $dep_var c.lease_duration_at_trans##c.$indep_var i.freehold##c.$indep_var if obs_to_use, absorb(`fe') cluster($cluster)
+		
+		local fe_vars "L_year year district city location postcode type price_quint price_dec"
+		foreach var of local fe_vars {
+			if strpost(`fe', "`var'") {
+				estadd local `var'_fe "$\checkmark", replace
+			}
+		}
+		
+		local count = `count'+1
+	}
+
+	esttab using "$TABLES/main_continuous_regression_$restriction$tag.tex", ///
+		se title("Effect of Interest Rate on Lease Duration and Freeholds \label{tab: main continuous regression $restriction $tag}") ///
+		keep(c.lease_duration_at_trans#c.$indep_var ///
+			 1.freehold#c.$indep_var) ///
+		varlabels(c.lease_duration_at_trans#c.$indep_var "\multirow{2}{3cm}{Lease Duration x $indep_var_label}" ///
+				  1.freehold#c.$indep_var "\multirow{2}{3cm}{Freehold x $indep_var_label}") ///
+		mlabels("$dep_var_label" "$dep_var_label" "$dep_var_label" "$dep_var_label" "$dep_var_label" "$dep_var_label") gaps replace substitute(\_ _) ///
+		s(L_year_fe year_fe district_fe city_fe location_fe postcode_fe type_fe price_quint_fe price_dec_fe N, ///
+			label("Purchase Year" ///
+				  "$\times$ Sale Year" ///
+				  "$\times$ District" ///
+				  "$\times$ City" ///
+				  "$\times$ Location" ///
+				  "$\times$ Postcode" ///
+				  "$\times$ Type" ///
+				  "$\times$ Price Quintile" ///
+				  "$\times$ Price Decile" ///
+				  ))
 }
 
-esttab using "$TABLES/main_continuous_regression_$tag.tex", ///
-	se title("Effect of Interest Rate on Lease Duration and Freeholds \label{tab: main continuous regression $tag}") ///
+
+* Run main specification for each type
+
+eststo clear
+eststo: reghdfe $dep_var c.lease_duration_at_trans##c.$indep_var i.freehold##c.$indep_var, absorb(i.district_n##i.year##i.L_year) cluster($cluster)
+forvalues i=1/5 {
+	eststo: reghdfe $dep_var c.lease_duration_at_trans##c.$indep_var i.freehold##c.$indep_var if type_n == `i', absorb(i.district_n##i.year##i.L_year) cluster($cluster)
+	local fe_vars "L_year year district"
+	foreach var of local fe_vars {
+		if strpost(`fe', "`var'") {
+			estadd local `var'_fe "$\checkmark", replace
+		}
+	}	
+}
+esttab using "$TABLES/main_regression_by_type_$tag.tex", ///
+	se title("Effect of Interest Rate on Lease Duration and Freeholds by Property Type \label{tab: main regression by type $tag}") ///
 	keep(c.lease_duration_at_trans#c.$indep_var ///
 		 1.freehold#c.$indep_var) ///
 	varlabels(c.lease_duration_at_trans#c.$indep_var "\multirow{2}{3cm}{Lease Duration x $indep_var_label}" ///
 			  1.freehold#c.$indep_var "\multirow{2}{3cm}{Freehold x $indep_var_label}") ///
-	mlabels("$dep_var_label" "$dep_var_label" "$dep_var_label" "$dep_var_label" "$dep_var_label") gaps replace substitute(\_ _) ///
-	s(fe1 fe2 fe3 fe4 N, ///
-		label("\thead{District // $\times$ Purchase Year $\times$ Sale Year}" ///
-			  "\thead{District // $\times$ Purchase Year $\times$ Sale Year // $\times$ Type}" ///
-			  "\thead{District // $\times$ Purchase Year $\times$ Sale Year // $\times$ Type $\times$ New Build}" ///
-			  "\thead{District // $\times$ Purchase Year $\times$ Sale Year // $\times$ Type $\times$ New Build // $\times$ Price Quintile By Year}" ///
-			  ))
-
-* Run main specification on restricted sample:
-
-local count = 1
-eststo clear
-foreach fe of global fes  {
-	eststo: reghdfe $dep_var c.lease_duration_at_trans##c.$indep_var i.freehold##c.$indep_var if restricted_obs_to_use_1 & restricted_obs_to_use_2 & restricted_obs_to_use_3 & restricted_obs_to_use_4, absorb(`fe') cluster($cluster)
-	estadd local fe`count' "$\checkmark$" , replace
-	local count = `count' + 1
-}
-
-esttab using "$TABLES/main_continuous_regression_restricted_$tag.tex", ///
-	se title("Effect of Interest Rate on Lease Duration and Freeholds, Restricted Sample \label{tab: main continuous regression restricted sample $tag}") ///
-	keep(c.lease_duration_at_trans#c.$indep_var ///
-		 1.freehold#c.$indep_var) ///
-	varlabels(c.lease_duration_at_trans#c.$indep_var "\multirow{2}{3cm}{Lease Duration x $indep_var_label}" ///
-			  1.freehold#c.$indep_var "\multirow{2}{3cm}{Freehold x $indep_var_label}") ///
-	mlabels("$dep_var_label" "$dep_var_label" "$dep_var_label" "$dep_var_label" "$dep_var_label") gaps replace substitute(\_ _) ///
-	s(fe1 fe2 fe3 fe4 N, ///
-		label("\thead{District // $\times$ Purchase Year $\times$ Sale Year}" ///
-			  "\thead{District // $\times$ Purchase Year $\times$ Sale Year // $\times$ Type}" ///
-			  "\thead{District // $\times$ Purchase Year $\times$ Sale Year // $\times$ Type $\times$ New Build}" ///
-			  "\thead{District // $\times$ Purchase Year $\times$ Sale Year // $\times$ Type $\times$ New Build // $\times$ Price Quintile By Year}" ///
-			  ))
-
-* Run main specification, but use less fixed effects:
-global limited_fes `" "i.district_n" "i.district_n##i.L_year" "i.district_n##i.year" "i.district_n##i.year##i.L_year" "i.district_n##i.year##i.L_year##i.flat" "'
-
-cap drop restricted_obs_to_use*
-local count = 1
-eststo clear
-eststo: reghdfe $dep_var c.lease_duration_at_trans##c.$indep_var i.freehold##c.$indep_var, noabsorb cluster($cluster)
-foreach fe of global fes  {
-	eststo: reghdfe $dep_var c.lease_duration_at_trans##c.$indep_var i.freehold##c.$indep_var, absorb(`fe') cluster($cluster)
-	estadd local fe`count' "$\checkmark$" , replace
-	
-	* Keep track of sample that was used for each regression
-	gen restricted_obs_to_use_`count' = e(sample)
-	
-	local count = `count' + 1
-}
-
-esttab using "$TABLES/main_continuous_regression_less_fes_$tag.tex", ///
-	se title("Effect of Interest Rate on Lease Duration and Freeholds, Less FEs \label{tab: main continuous regression $tag}") ///
-	keep(c.lease_duration_at_trans#c.$indep_var ///
-		 1.freehold#c.$indep_var) ///
-	varlabels(c.lease_duration_at_trans#c.$indep_var "\multirow{2}{3cm}{Lease Duration x $indep_var_label}" ///
-			  1.freehold#c.$indep_var "\multirow{2}{3cm}{Freehold x $indep_var_label}") ///
-	mlabels("$dep_var_label" "$dep_var_label" "$dep_var_label" "$dep_var_label" "$dep_var_label") gaps replace substitute(\_ _) ///
-	s(fe1 fe2 fe3 fe4 N, ///
-		label("\thead{District}" ///
-			  "\thead{District // $\times$ Purchase Year}" ///
-			  "\thead{District // $\times$ Sale Year}" ///
-			  "\thead{District // $\times$ Purchase Year $\times$ Sale Year}" ///
-			  "\thead{District // $\times$ Purchase Year $\times$ Sale Year // $\times$ Is Flat}" ///
-			  ))
-
-* Again restrict sample
-local count = 1
-eststo clear
-eststo: reghdfe $dep_var c.lease_duration_at_trans##c.$indep_var i.freehold##c.$indep_var, noabsorb cluster($cluster)
-foreach fe of global fes  {
-	eststo: reghdfe $dep_var c.lease_duration_at_trans##c.$indep_var i.freehold##c.$indep_var if estricted_obs_to_use_1 & restricted_obs_to_use_2 & restricted_obs_to_use_3 & restricted_obs_to_use_4, absorb(`fe') cluster($cluster)
-	estadd local fe`count' "$\checkmark$" , replace
-	local count = `count' + 1
-	
-	* Keep track of sample that was used for each regression
-	gen restricted_obs_to_use_`count' = e(sample)
-}
-
-esttab using "$TABLES/main_continuous_regression_less_fes_restricted_$tag.tex", ///
-	se title("Effect of Interest Rate on Lease Duration and Freeholds, Less FEs + Restricted Sample \label{tab: main continuous regression $tag}") ///
-	keep(c.lease_duration_at_trans#c.$indep_var ///
-		 1.freehold#c.$indep_var) ///
-	varlabels(c.lease_duration_at_trans#c.$indep_var "\multirow{2}{3cm}{Lease Duration x $indep_var_label}" ///
-			  1.freehold#c.$indep_var "\multirow{2}{3cm}{Freehold x $indep_var_label}") ///
-	mlabels("$dep_var_label" "$dep_var_label" "$dep_var_label" "$dep_var_label" "$dep_var_label") gaps replace substitute(\_ _) ///
-	s(fe1 fe2 fe3 fe4 N, ///
-		label("\thead{District}" ///
-			  "\thead{District // $\times$ Purchase Year}" ///
-			  "\thead{District // $\times$ Sale Year}" ///
-			  "\thead{District // $\times$ Purchase Year $\times$ Sale Year}" ///
+	mlabels("All" "Detached" "Flats" "Other" "Semi-Detached" "Terraced") gaps replace substitute(\_ _) ///
+	s(L_year_fe year_fe district_fe N, ///
+		label("Purchase Year" ///
+			  "$\times$ Sale Year" ///
+			  "$\times$ District" ///
 			  ))

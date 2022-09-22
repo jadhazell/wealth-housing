@@ -37,7 +37,7 @@ if `differenced' {
 	
 	global indep_var d_interest_rate
 	global indep_var_label "$\Delta$ Interest Rate"
-	global fes `" "i.district_n##i.year##i.L_year" "i.district_n##i.year##i.L_year##i.type_n" "i.district_n##i.year##i.L_year##i.type_n##i.new_n" "i.district_n##i.year##i.L_year##i.type_n##i.new_n##i.price_quintile_yearly"  "'
+	global fes `" "i.district_n##i.year##i.L_year" "i.city_n##i.year##i.L_year" "i.postcode_n##i.year##i.L_year" "i.district_n##i.year##i.L_year##i.type_n" "i.district_n##i.year##i.L_year##i.type_n##i.L_price_quint_group" "i.district_n##i.year##i.L_year##i.type_n##i.L_price_dec_group" "'
 	global cluster "date_trans L_date_trans location_n"
 	
 	global iv_var d_cesa_bianchi
@@ -136,8 +136,13 @@ else {
 	}
 }
 
+* Normalize lease duration
+replace lease_duration_at_trans = lease_duration_at_trans/1000
+replace lease_duration_at_trans = 0 if freehold
+
 di "==================================================="
 di "Tag: $tag"
 di "Dependent variable: $dep_var"
 di "Independent variable: $indep_var"
 di "==================================================="
+
