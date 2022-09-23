@@ -54,25 +54,41 @@ tsset rate_date
 gen d_rate = D.interest_rate
 
 sort rate_date
+
+* 1 quarter lags
 forvalues i = 1/8 {
 	gen L`i'_d_interest_rate = L`i'.d_rate
 }
 
-forvalues i = 2/8 {
-	gen F`i'_d_interest_rate = F`i'.d_rate
+* 1 year lags
+forvalues i = 4(4)32 {
+	local prev_i = `i' - 4
+	gen D4L`i'_interest_rate = L`prev_i'.interest_rate - L`i'.interest_rate
 }
 
+* 5 year lags
+forvalues i = 20(20)160 {
+	local prev_i = `i' - 20
+	gen D20L`i'_interest_rate = L`prev_i'.interest_rate - L`i'.interest_rate
+}
+
+// * 1 quarter leads
+// forvalues i = 2/8 {
+// 	gen F`i'_d_interest_rate = F`i'.d_rate
+// }
+
+* Get h=1/100 period lags to match to h
 forvalues i = 1/110 {
 	gen L`i'_interest_rate = L`i'.interest_rate
 	gen DL`i'_interest_rate = interest_rate - L`i'.interest_rate
 	drop  L`i'_interest_rate
 }
 
-forvalues i = 1/110 {
-	gen F`i'_interest_rate = F`i'.interest_rate
-	gen DF`i'_interest_rate = F`i'.interest_rate - interest_rate
-	drop  F`i'_interest_rate
-}
+// forvalues i = 1/110 {
+// 	gen F`i'_interest_rate = F`i'.interest_rate
+// 	gen DF`i'_interest_rate = F`i'.interest_rate - interest_rate
+// 	drop  F`i'_interest_rate
+// }
 
 drop d_rate rate_date
 
@@ -81,12 +97,12 @@ save "$WORKING/interest_rates_with_leads_lags.dta", replace
 * Generate leads and lags
 
 use "$WORKING/interest_rates_with_leads_lags.dta", clear
-keep year quarter L*
+keep year quarter L* DL* D*L*
 gen L_date_trans = year + (quarter-1)/4
 gen date_trans = L_date_trans
 save "$WORKING/interest_rates_lags.dta", replace
 
 use "$WORKING/interest_rates_with_leads_lags.dta", clear
-keep year quarter F*
+keep year quarter F* DF*
 gen date_trans = year + (quarter-1)/4
 save "$WORKING/interest_rates_leads.dta", replace

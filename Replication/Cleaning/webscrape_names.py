@@ -12,12 +12,18 @@ import urllib3, socket
 from urllib3.connection import HTTPConnection
 from multiprocessing import Pool
 import time
-# from scrapingbee import ScrapingBeeClient
-from itertools import cycle
-from scraper_api import ScraperAPIClient
+from scrapingbee import ScrapingBeeClient
+from Property import Property
+from utilities import *
+
+def valid_match(property_obj, address):
+	if clean_number(property_obj.street_number) in address and clean_number(property_obj.flat_number) in address:
+		return True 
+	return False
 
 main_dir = "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_VBP"
 input_folder = os.path.join(main_dir, "Cleaning", "Output")
+stata_working_folder = os.path.join(main_dir, "Cleaning", "Working", "stata_working")
 output_folder = os.path.join(main_dir, "Cleaning", "Working", "Scraped Names")
 
 # input_folder = os.path.join("..","Input")
@@ -25,11 +31,28 @@ output_folder = os.path.join(main_dir, "Cleaning", "Working", "Scraped Names")
 
 proxy='http://orange:orange@43.132.109.229:23992'
 
-header = {
-	"accept" : "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
-	"user-agent" : "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36"
+# Login Info:
+headers = {
+    'authority': 'tracegenie.com',
+    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+    'accept-language': 'en-US,en;q=0.9',
+    'cache-control': 'max-age=0',
+    # Requests sorts cookies= alphabetically
+    # 'cookie': 'PHPSESSID=4909c423d1e655241effd2049b3563c1; _ga=GA1.2.826987009.1663070199; amember_nr=fda6d4b1c4687c4b8c8067cd4cc01e96; _gid=GA1.2.2014828953.1663856187; _gat=1',
+    'origin': 'https://www.tracegenie.com',
+    'referer': 'https://www.tracegenie.com/',
+    'sec-ch-ua': '"Google Chrome";v="105", "Not)A;Brand";v="8", "Chromium";v="105"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"macOS"',
+    'sec-fetch-dest': 'document',
+    'sec-fetch-mode': 'navigate',
+    'sec-fetch-site': 'same-site',
+    'sec-fetch-user': '?1',
+    'upgrade-insecure-requests': '1',
+    'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36',
 }
 
+api_key = "WYILHXMUMDNJ8HZSC1YEQD21KWI186E4YAO7Y2Z4BWUJKO6LWT96IM0P7YM89N6HGV6W5BZ02MBES0YK"
 
 # Functions
 
@@ -39,6 +62,7 @@ def webscrape_names_addresses(inp):
 
 	postcode = inp[0]
 	session = inp[1]
+	existing_properties = inp[2]
 
 	output_msg = f"Scraping {postcode}!\n"
 	# print(f"Scraping {postcode}!\n")
@@ -51,6 +75,11 @@ def webscrape_names_addresses(inp):
 
 	output_file = os.path.join(output_folder, f"{postcode}.csv")
 
+	output_msg += f"Existing properties: {[prop.address for prop in existing_properties]}"
+
+	# print(postcode)
+	# print([prop.address for prop in existing_properties])
+
 	valid_request = True
 	page_num = 0
 	while valid_request:
@@ -59,17 +88,15 @@ def webscrape_names_addresses(inp):
 		output_msg += f"\n\n\nPage {page_num}\n---------------------\n"
 		output_msg += f"Request: {url}\n"
 
-		# result = session.get(url=url, proxies={"http": proxy, "https": proxy})
-		result = session.get(url=url, headers=header)
-		#result = session.get('http://api.scraperapi.com', params={'api_key':'cd6ce6bfd2fe26b6f767477b093212e2', 'url':url})
+		# print(f"\n\n\nPage {page_num}\n---------------------\n")
+		# print(f"Request: {url}\n")
+
+		result = session.get(url, params = {'render_js': 'False',}, cookies=cookies, headers=headers)
 		if result.status_code != 200:
 			print(f"I was blocked from {url}!")
 			print(result.status_code)
 			quit()
 		soup = BeautifulSoup(result.text, 'html.parser')
-
-		# print("Full result:")
-		# print(result.text)
 
 		# Search each div tag
 		divs = soup.find_all("div")
@@ -81,7 +108,7 @@ def webscrape_names_addresses(inp):
 
 			# Remove extra spaces
 			name = " ".join(name.split())
-			address = " ".join(address.split())
+			address = clean(" ".join(address.split()))
 
 			# If we've already reviewed this address, continue
 			if address in all_addresses:
@@ -92,7 +119,18 @@ def webscrape_names_addresses(inp):
 			# print(name)
 			output_msg += "\nAddress:\n"
 			output_msg += address + "\n"
-			# print(f"\nAddress:\n {address}")
+			# print(f"\nAddress: {address}\n")
+
+			# Check that the address exists in our transaction data
+			address_exists = False
+			for existing_property in existing_properties:
+				if valid_match(existing_property, address):
+					address_exists = True 
+					existing_properties.remove(existing_property)
+					break
+			if not address_exists:
+				output_msg += "Address is not in transaction data\n"
+				continue
 
 			# Get the full history of residents of this address
 			href = ""
@@ -101,9 +139,7 @@ def webscrape_names_addresses(inp):
 					href = tag["href"]
 
 			history_url = f"https://www.tracegenie.com/amember4/amember/1DAY/{href}"
-			#history_result = session.get(history_url, proxies={"http": proxy, "https": proxy})
-			history_result = session.get(url=history_url, headers=header)
-			#history_result = session.get('http://api.scraperapi.com', params={'api_key':'cd6ce6bfd2fe26b6f767477b093212e2', 'url':history_url})
+			history_result = session.get(history_url, params = {'render_js': 'False',}, cookies=cookies, headers=headers)
 			if history_result.status_code != 200:
 				print(f"I was blocked from {history_url}!")
 				print(result.status_code)
@@ -146,6 +182,11 @@ def webscrape_names_addresses(inp):
 			output_msg += "No next button. Skipping to next postcode.\n"
 			valid_request = False
 
+		# If we've matched all the properties in our transaction data set, don't keep searching
+		if len(existing_properties) == 0:
+			output_msg += "Matched all properties.\n"
+			valid_request = False
+
 	print(output_msg)
 	if len(new_data) > 0:
 		print("Storing data!\n")
@@ -160,55 +201,80 @@ def parallel_scraping(operation, input, pool):
 
 if __name__ == "__main__":
 
-	# Login Info:
-	payload = {
-		"amember_login" : "veronicabp@gmail.com",
-		"amember_pass" : "TGdavipami2k!"
+	data = {
+	    'amember_login': 'nturco@princeton.edu',
+	    'amember_pass': 'bnbrk5',
 	}
+
+	# cookies = {
+ #    # 'PHPSESSID': '4909c423d1e655241effd2049b3563c1',
+ #    '_ga': 'GA1.2.826987009.1663070199',
+ #    'amember_nr': 'fda6d4b1c4687c4b8c8067cd4cc01e96',
+ #    '_gid': 'GA1.2.2014828953.1663856187',
+ #    '_gat': '1',
+	# }
+
+	cookies = dict()
+
 
 	# Log in to website
 	print("Trying to log in...")
 
-	# session = requests.Session()
-	session = ScraperAPIClient('cd6ce6bfd2fe26b6f767477b093212e2')
-	# request = session.post("https://tracegenie.com/amember4/amember/login", data=payload, headers=header, proxies={"http":proxy, "https":proxy}, )
-	# request = session.post("https://tracegenie.com/amember4/amember/login", data=payload)
-	# request = session.post('http://api.scraperapi.com', params={'api_key':'cd6ce6bfd2fe26b6f767477b093212e2', 'url':'https://tracegenie.com/amember4/amember/login'}, data=payload)
-	request = session.post("https://tracegenie.com/amember4/amember/login", headers=header, body=payload)
-	print(request.status_code)
+	session = ScrapingBeeClient(api_key=api_key)
+	result = session.post("https://tracegenie.com/amember4/amember/login", data=data, params = {'render_js': 'False',})
+	if result.status_code != 200:
+		print(f"Unable to log in!")
+		print(result.status_code)
+		quit()
 
-	print("Logged in to Trace Genie")
+	returned_cookies = result.headers["Spb-Set-Cookie"]
+	returned_cookies = returned_cookies.split(";")
+	print(f"Returned Cookies:", returned_cookies)
+	for cookie in returned_cookies:
+		if 'PHPSESSID' in cookie:
+			print("adding new cookie")
+			cookies["PHPSESSID"] = cookie.replace("PHPSESSID=","")
+			break
+	print("Cookies: ", cookies)
 
-	# print(request.text)
+	url = "https://www.tracegenie.com/amember4/amember/1DAY/allpcsnew.php?s=0&q6=AL1%201AJ"
+	result = session.get(url, params = {'render_js': 'False',}, cookies=cookies, headers=headers)
+	print(result.text)
 
-	# File Paths
-	transactions_file = os.path.join(input_folder, "postcodes.csv")
+	# print("Logged into Trace Genie")
 
-	# Load properties addresses data
-	df = pd.read_csv(transactions_file)
+	# # File Paths
+	# transactions_file = os.path.join(input_folder, "postcodes.csv")
 
-	# Keep only first 500,000
-	df = df.head(500000)
+	# # Load properties addresses data
+	# df = pd.read_csv(transactions_file)
 
-	processed_postcodes = [postcode.replace(".csv","") for postcode in os.listdir(output_folder)]
+	# # Load existing properties in transaction data
+	# with open(os.path.join(stata_working_folder, "all_transaction_data.p"), "rb") as f:
+	# 	transaction_data = pickle.load(f)
 
-	# print(f"Processed Postcodes: {processed_postcodes}")
+	# # # Keep only first 500,000
+	# df = df.tail(5)
+	# processed_postcodes = []
+	# # processed_postcodes = [postcode.replace(".csv","") for postcode in os.listdir(output_folder)]
 
-	inp = [(row["postcode"], session) for _, row in df.iterrows() if row["postcode"] not in processed_postcodes]
+	# # Collect input data:
+	# inp = []
+	# for _, row in df.iterrows():
+	# 	postcode = row["postcode"]
+	# 	if postcode in transaction_data:
+	# 		inp.append((postcode, session, set(transaction_data[postcode])))
 
+	# # print(f"Postcodes Left: {inp}")
 
-	# print(f"Postcodes Left: {inp}")
+	# print(f"Loaded data: [{len(inp)}/{df.shape[0]}] (= {100*len(inp)/df.shape[0]} %) postcodes left to process")
 
-	print(f"Loaded data: [{len(inp)}/{df.shape[0]}] (= {100*len(inp)/df.shape[0]} %) postcodes left to process")
-
-	# Parallelize code
+	# # Parallelize code
 	# num_processes = os.cpu_count()
-	# num_processes = 100
-	num_processes = 1
-	processes_pool = Pool(num_processes)
+	# processes_pool = Pool(num_processes)
 
-	print("Scraping in parallel:")
-	parallel_scraping(webscrape_names_addresses, inp, processes_pool)
+	# print("Scraping in parallel:")
+	# parallel_scraping(webscrape_names_addresses, inp, processes_pool)
 
 
 

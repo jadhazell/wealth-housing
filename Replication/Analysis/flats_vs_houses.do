@@ -52,7 +52,7 @@ replace lease_duration_at_trans = lease_duration_at_trans / 1000
 * Summarize leasehold vs freehold rate by type 
 eststo clear
 estpost tab freehold type_full
-esttab using "$TABLES/freehold_rate_by_type.tex", unstack noobs nonumber nomtitle varlabels(0 "Leasehold" 1 "Freehold") replace
+esttab using "$TABLES/freehold_rate_by_type.tex", cell( b(fmt(g)) colpct(fmt(2) par)) collabels(none)  unstack noobs nonumber nomtitle varlabels(0 "Leasehold" 1 "Freehold", blist(Total "\hline")) replace
 
 * Regress duration by type
 eststo clear

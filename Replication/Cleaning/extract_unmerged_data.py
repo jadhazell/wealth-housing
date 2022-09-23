@@ -34,7 +34,7 @@ def delete_existing_pickled_files(divided_data_directory, output_lease_file = "l
 			except:
 				pass
 
-def extract_unmerged_price_data(unmerged_prices_data_file, divided_data_directory, output_price_file, division_level="postcode"):
+def extract_unmerged_price_data(data_directory, unmerged_prices_data_file, divided_data_directory, output_price_file, division_level="postcode"):
 	'''
 	extract data from .dta file, separate it by the appropriate division level, and store it in a pickled dictionary (with keys that are members of the identified division level)
 
@@ -83,6 +83,12 @@ def extract_unmerged_price_data(unmerged_prices_data_file, divided_data_director
 				price_data[city] = [prop]
 
 	print("Storing unmerged price data in folders...")
+
+	# Dump all data:
+	main_file = os.path.join(data_directory, f"all_transaction_data.p")
+	with open(main_file, "wb") as f:
+		pickle.dump(price_data, f)
+
 	# Store data into postcode-separated folders
 	total_obs = 0
 	for key in tqdm(price_data):
@@ -106,7 +112,7 @@ def extract_unmerged_price_data(unmerged_prices_data_file, divided_data_director
 	keys = price_data.keys()
 	return keys
 
-def extract_unmerged_lease_data(unmerged_lease_data_file, divided_data_directory, output_lease_file, division_level="postcode", keys=[]):
+def extract_unmerged_lease_data(data_directory, unmerged_lease_data_file, divided_data_directory, output_lease_file, division_level="postcode", keys=[]):
 	'''
 	extract data from .dta file, separate it by the appropriate division level, and store it in a pickled dictionary (with keys that are members of the identified division level)
 
@@ -176,6 +182,12 @@ def extract_unmerged_lease_data(unmerged_lease_data_file, divided_data_directory
 					lease_data[city] = [address]
 
 	print("Storing unmerged lease data in folders...")
+
+	# Dump all data:
+	main_file = os.path.join(data_directory, f"all_lease_data.p")
+	with open(main_file, "wb") as f:
+		pickle.dump(lease_data, f)
+
 	# Store lease data by postcode
 	for key in tqdm(lease_data):
 		try:
@@ -203,10 +215,10 @@ def main(data_directory, divided_data_directory, division_level="postcode", leas
 
 	if run_price == "T":
 		print("Extracting unmerged price data")
-		keys = extract_unmerged_price_data(os.path.join(data_directory, price_file), divided_data_directory, output_price_file, division_level=division_level)
-	# if run_lease == "T":
-	# 	print("Extracting unmerged lease data")
-	# 	extract_unmerged_lease_data(os.path.join(data_directory, lease_file), divided_data_directory, output_lease_file, division_level=division_level)
+		keys = extract_unmerged_price_data(data_directory, os.path.join(data_directory, price_file), divided_data_directory, output_price_file, division_level=division_level)
+	if run_lease == "T":
+		print("Extracting unmerged lease data")
+		extract_unmerged_lease_data(data_directory, os.path.join(data_directory, lease_file), divided_data_directory, output_lease_file, division_level=division_level)
 
 
 if __name__ == "__main__":

@@ -13,11 +13,11 @@ if !missing(`"`2'"') {
 }
 
 if !missing(`"`3'"') {
-	local differenced = `3'
+	local restricted = `3'
 }
 
 if !missing(`"`4'"') {
-	local differenced = `4'
+	local drop_under_80 = `4'
 }
 
 * Get data

@@ -2,6 +2,7 @@ local differenced = `1'
 local logs = `2'
 local restricted = `3'
 local drop_under_80 = `4'
+local only_flats = `5'
 
 global INPUT "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_VBP/Cleaning/Output"
 global WORKING "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_VBP/Cleaning/Working/stata_working"
@@ -23,6 +24,12 @@ if `drop_under_80' {
 	global tag "drop_under_80_$tag"	
 }
 
+if `only_flats' {
+	drop if type != "F"
+	global tag "only_flats_$tag"	
+}
+
+
 * Bucket name is the same for differences and levels
 global bucket_name bucket_3
 global bucket_11_name bucket_11
@@ -37,7 +44,12 @@ if `differenced' {
 	
 	global indep_var d_interest_rate
 	global indep_var_label "$\Delta$ Interest Rate"
-	global fes `" "i.district_n##i.year##i.L_year" "i.city_n##i.year##i.L_year" "i.postcode_n##i.year##i.L_year" "i.district_n##i.year##i.L_year##i.type_n" "i.district_n##i.year##i.L_year##i.type_n##i.L_price_quint_group" "i.district_n##i.year##i.L_year##i.type_n##i.L_price_dec_group" "'
+	global fes `" "i.district_n##i.year##i.L_year" "i.city_n##i.year##i.L_year" "i.location_n##i.year##i.L_year" "i.postcode_n##i.year##i.L_year" "i.district_n##i.year##i.L_year##i.type_n" "i.district_n##i.year##i.L_year##i.type_n##i.L_price_quint_group" "i.district_n##i.year##i.L_year##i.type_n##i.L_price_dec_group" "'
+	
+	if `only_flats' {
+		global fes `" "i.district_n##i.year##i.L_year" "i.city_n##i.year##i.L_year" "i.location_n##i.year##i.L_year" "i.postcode_n##i.year##i.L_year" "i.district_n##i.year##i.L_year##i.L_price_quint_group" "i.district_n##i.year##i.L_year##i.L_price_dec_group" "'
+	}
+	
 	global cluster "date_trans L_date_trans location_n"
 	
 	global iv_var d_cesa_bianchi
@@ -137,7 +149,6 @@ else {
 }
 
 * Normalize lease duration
-replace lease_duration_at_trans = lease_duration_at_trans/1000
 replace lease_duration_at_trans = 0 if freehold
 
 di "==================================================="

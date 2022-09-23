@@ -22,8 +22,7 @@ if "$tag" == "_hedonic" {
 	drop _merge
 }
 	
-save "$OUTPUT/full_data$tag.dta", replace
-																																  
+save "$OUTPUT/full_data$tag.dta", replace																						  
 ********************************************
 * Generate useful variables
 ********************************************
@@ -50,13 +49,13 @@ drop pos_empty
 drop if missing(location)
 
 * Make string factor variables numeric
-egen location_n = group(location)
-egen type_n = group(type)
-egen postcode_n = group(postcode)
-egen property_id_n = group(property_id)
-egen new_n = group(new)
-egen district_n = group(district)
-egen city_n = group(city)
+gegen location_n = group(location)
+gegen type_n = group(type)
+gegen postcode_n = group(postcode)
+gegen property_id_n = group(property_id)
+gegen new_n = group(new)
+gegen district_n = group(district)
+gegen city_n = group(city)
 gen flat = type == "F" 
 
 * Winsorize price
@@ -67,8 +66,8 @@ gen log_price = log(price)
 gen log_price_win = log(price_win)
 
 * Create price quintile information by year 
-egen price_quint_group=xtile(price), n(5) by(date_trans district_n)
-egen price_dec_group=xtile(price), n(10) by(date_trans district_n)
+fasterxtile price_quint_group = price, nq(5)  by(date_trans district_n)
+fasterxtile price_dec_group   = price, nq(10) by(date_trans district_n)
 
 ********************************************
 * Drop missing and incoherent data
@@ -82,14 +81,14 @@ duplicates tag property_id, gen(dup_pid)
 duplicates tag property_id duration, gen(dup_pid_dur)
 
 gen no_match = dup_pid != dup_pid_dur
-egen switches_duration = total(no_match), by(property_id)
+gegen switches_duration = total(no_match), by(property_id)
 
 drop if switches_duration
 
 drop dup* switches_duration no_match
 
 * Drop if remaining lease duration is zero or negative
-drop if lease_duration_at_trans <= 0
+drop if leasehold & lease_duration_at_trans <= 0
 
 save "$OUTPUT/full_cleaned_data$tag.dta", replace
 
@@ -113,7 +112,8 @@ by property_id: gen L_number_years_missing = number_years_missing[_n-1]
 by property_id: gen L_number_years_partial_missing = number_years_partial_missing[_n-1]
 by property_id: gen L_cesa_bianchi_cum = cesa_bianchi_cum[_n-1]
 by property_id: gen L_cloyne_hurtgen_cum = cloyne_hurtgen_cum[_n-1]		
-by property_id: gen L_price_quintile_yearly = price_quintile_yearly[_n-1]														   
+by property_id: gen L_price_quint_group = price_quint_group[_n-1]
+by property_id: gen L_price_dec_group = price_dec_group[_n-1]														   
 by property_id: gen L_year = year[_n-1]	
 																  
 * Tag data for which the lease was extended half way through the ownership
@@ -142,17 +142,17 @@ drop if lease_was_extended
 ******************************/
 
 * Generate x_tiles of purchase price 
-xtile price_quintile = L_price, nq(5) 
-xtile price_quintile_sale = price, nq(5) 
-xtile price_ventile = L_price, nq(20)
+fasterxtile price_quintile = L_price, nq(5) 
+fasterxtile price_quintile_sale = price, nq(5) 
+fasterxtile price_ventile = L_price, nq(20)
 
-xtile bucket_3 = lease_duration_at_trans, nq(2)
+fasterxtile bucket_3 = lease_duration_at_trans, nq(2)
 replace bucket_3 = 3 if !leasehold
 
-xtile bucket_6 = lease_duration_at_trans, nq(5)
+fasterxtile bucket_6 = lease_duration_at_trans, nq(5)
 replace bucket_6 = 3 if !leasehold
 
-xtile bucket_11 = lease_duration_at_trans, nq(11)
+fasterxtile bucket_11 = lease_duration_at_trans, nq(11)
 replace bucket_11 = 11 if !leasehold
 
 * Classify data into five year periods (based on purchase data, sale date, and halfway point)
@@ -168,17 +168,17 @@ foreach var of varlist purchase half_way sale {
 	replace year_bucket_`var' = "2020+" if `var' >= 2020
 }
 
-xtile price_quintile_restricted = L_price if !missing(L_date_trans), nq(5) 
-xtile price_quintile_sale_restricted = price if !missing(L_date_trans), nq(5) 
-xtile price_ventile_restricted = L_price if !missing(L_date_trans), nq(20)
+fasterxtile price_quintile_restricted = L_price if !missing(L_date_trans), nq(5) 
+fasterxtile price_quintile_sale_restricted = price if !missing(L_date_trans), nq(5) 
+fasterxtile price_ventile_restricted = L_price if !missing(L_date_trans), nq(20)
 
-xtile bucket_3_restricted = lease_duration_at_trans if !missing(L_date_trans), nq(2)
+fasterxtile bucket_3_restricted = lease_duration_at_trans if !missing(L_date_trans), nq(2)
 replace bucket_3_restricted = 3 if !leasehold & !missing(L_date_trans)
 
-xtile bucket_6_restricted = lease_duration_at_trans if !missing(L_date_trans), nq(5)
+fasterxtile bucket_6_restricted = lease_duration_at_trans if !missing(L_date_trans), nq(5)
 replace bucket_6_restricted = 3 if !leasehold & !missing(L_date_trans)
 
-xtile bucket_11_restricted = lease_duration_at_trans if !missing(L_date_trans), nq(11)
+fasterxtile bucket_11_restricted = lease_duration_at_trans if !missing(L_date_trans), nq(11)
 replace bucket_11_restricted = 11 if !leasehold & !missing(L_date_trans)
 
 save "$OUTPUT/full_cleaned_data_with_lags$tag.dta", replace

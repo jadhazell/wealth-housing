@@ -1,21 +1,45 @@
-local differenced = `1'
-local restricted = `2'
-local logs = `3'
-local duplicate_registration = `4'
-local flats = `5'
-local windsor = `6'
-local under_80 = `7'
-local post_2004 = `8'
-local below_median_price = `9'
-local above_median_price = `10'
+
+* Get parameters
+local differenced = 1
+local logs = 1
+local restricted = 0
+local drop_under_80 = 1
+
+if !missing(`"`1'"') {
+	local differenced = `1'
+}
+
+if !missing(`"`2'"') {
+	local logs = `2'
+}
+
+if !missing(`"`3'"') {
+	local restricted = `3'
+}
+
+if !missing(`"`4'"') {
+	local drop_under_80 = `4'
+}
+
+di "`1'"
+di "`2'"
+di "`3'"
+di "`4'"
+
+di "`differenced'"
+di "`logs'"
+di "`restricted'"
+di "`drop_under_80'"
+
+* Get data
+do select_sample `differenced' `logs' `restricted' `drop_under_80'
+
 
 global INPUT "/Users/vbp/Dropbox (Princeton)/wealth-housing/Code/Replication_VBP/Cleaning/Output"
 global RESULTS "/Users/vbp/Dropbox (Princeton)/Apps/Overleaf/UK Duration"
 global TABLES "$RESULTS/Tables/Snowballing"
 global FIGURES "$RESULTS/Figures/Snowballing"
 
-* Select correct sample according to parameters
-do select_sample `differenced' `restricted' `logs' `duplicate_registration' `flats' `windsor' `under_80' `post_2004' `below_median_price' `above_median_price'
 
 *******************************************************
 * For the differenced regression, we can include
@@ -23,37 +47,40 @@ do select_sample `differenced' `restricted' `logs' `duplicate_registration' `fla
 *******************************************************
 if `differenced' {
 
-// 	gen med_interest_rate = (interest_rate+L_interest_rate)/2
-//
-// 	local interest_rate_labels "Sale Rate" "Purchase Rate" "Midpoint Rate"
-// 	local bucket_name bucket_3_sale
-//
-// 	local count = 0
-// 	foreach rate_var of varlist interest_rate L_interest_rate med_interest_rate {
-// 		local count = `count'+1
-// 		local interest_rate_label : word `count' of "`interest_rate_labels'"
-//		
-// 		eststo clear 
-// 		foreach fe of global fes  {
-// 			di "`fe'"
-// 			di "reghdfe $dep_var i.$bucket_name##c.$indep_var##c.`rate_var', absorb(`fe') cluster($cluster)"
-// 			eststo: reghdfe $dep_var i.$bucket_name##c.$indep_var##c.`rate_var', absorb(`fe') cluster($cluster)
-// 		}
-//
-// 		esttab using "$TABLES/snowballing_regression_`rate_var'.tex", ///
-// 			se title("Regression Results With Interacted `interest_rate_label' Level \label{tab: `interest_rate_label'}") ///
-// 			keep(2.$bucket_name#c.$indep_var ///
-// 				 3.$bucket_name#c.$indep_var ///
-// 				 2.$bucket_name#c.$indep_var#c.`rate_var' ///
-// 				 3.$bucket_name#c.$indep_var#c.`rate_var') ///
-// 			varlabels(2.$bucket_name#c.$indep_var "\multirow{2}{4cm}{High Duration Leasehold x $\Delta$ Rate}" ///
-// 					  3.$bucket_name#c.$indep_var "\multirow{2}{4cm}{Freehold x $\Delta$ Rate}" ///
-// 					  2.$bucket_name#c.$indep_var#c.`rate_var' "\multirow{2}{4.5cm}{High Duration Leasehold x $\Delta$ Rate x `interest_rate_label'}" ///
-// 					  3.$bucket_name#c.$indep_var#c.`rate_var' "\multirow{2}{4.5cm}{Freehold x $\Delta$ Rate x `interest_rate_label'}") ///
-// 			gaps replace substitute(\_ _)  ///
-// 			mlabels("$dep_var_label" "$dep_var_label" "$dep_var_label" "$dep_var_label" "$dep_var_label") ///
-// 			stats(N r2 r2_within, fmt(%9.0fc %9.4fc) labels("N" "R2" "Within R2")) 
-// 	}
+	gen med_interest_rate = (interest_rate+L_interest_rate)/2
+
+	local interest_rate_labels "Sale Rate" "Purchase Rate" "Midpoint Rate"
+	local bucket_name bucket_3_sale
+
+	local count = 0
+	foreach rate_var of varlist interest_rate L_interest_rate med_interest_rate {
+		local count = `count'+1
+		local interest_rate_label : word `count' of "`interest_rate_labels'"
+		
+		if `count'==1 {
+			continue
+		}
+		
+		eststo clear 
+		foreach fe of global fes  {
+			di "`fe'"
+			eststo: reghdfe $dep_var c.$indep_var##c.`rate_var'##(c.lease_duration_at_trans i.freehold), absorb(`fe') cluster($cluster)
+		}
+
+		esttab using "$TABLES/snowballing_regression_`rate_var'.tex", ///
+			se title("Regression Results With Interacted `interest_rate_label' Level \label{tab: snowballing `rate_var'}") ///
+			keep(c.$indep_var#c.lease_duration_at_trans ///
+				 c.$indep_var#c.`rate_var'#c.lease_duration_at_trans ///
+				 1.freehold#c.$indep_var ///
+				 1.freehold#c.$indep_var#c.`rate_var' ) ///
+			varlabels(c.$indep_var#c.lease_duration_at_trans "\multirow{2}{4cm}{Duration x $\Delta$ Rate}" ///
+					  c.$indep_var#c.`rate_var'#c.lease_duration_at_trans "\multirow{2}{4cm}{Duration x $\Delta$ Rate x `interest_rate_label'}" ///
+					  1.freehold#c.$indep_var "\multirow{2}{4.5cm}{Freehold x $\Delta$ Rate }" ///
+					  1.freehold#c.$indep_var#c.`rate_var'#i.freehold"\multirow{2}{4.5cm}{Freehold x $\Delta$ Rate x `interest_rate_label'}") ///
+			gaps replace substitute(\_ _)  ///
+			mlabels("$dep_var_label" "$dep_var_label" "$dep_var_label" "$dep_var_label" "$dep_var_label") ///
+			stats(N r2 r2_within, fmt(%9.0fc %9.4fc) labels("N" "R2" "Within R2")) 
+	}
 
 // 	* Narrow in on first regression with sale interest rate interaction
 // 	reghdfe $dep_var i.bucket_3_sale##c.$indep_var##c.interest_rate, absorb(i.location_n##i.date_trans##i.L_date_trans) cluster($cluster)
@@ -96,11 +123,11 @@ if `differenced' {
 		levelsof `var', local(quarters)
 		local count = 1
 		foreach quarter of local quarters {
-			reghdfe $dep_var i.$bucket_name##c.$indep_var if `var'==`quarter', absorb(i.location_n##i.type_n) cluster(`other_var' location_n)
-			replace leasehold_coeff = _b[2.$bucket_name#c.$indep_var]  if _n == `count'
-			replace freehold_coeff  = _b[3.$bucket_name#c.$indep_var]  if _n == `count'
-			replace leasehold_se    = _se[2.$bucket_name#c.$indep_var] if _n == `count'
-			replace freehold_se     = _se[3.$bucket_name#c.$indep_var] if _n == `count'
+			reghdfe $dep_var c.$indep_var##(c.lease_duration_at_trans i.freehold) if `var'==`quarter', absorb(i.district_n##i.year##i.L_year) cluster(`other_var' location_n)
+			replace leasehold_coeff = _b[c.$indep_var#c.lease_duration_at_trans]  if _n == `count'
+			replace freehold_coeff  = _b[1.freehold#c.$indep_var]  if _n == `count'
+			replace leasehold_se    = _se[c.$indep_var#c.lease_duration_at_trans] if _n == `count'
+			replace freehold_se     = _se[1.freehold#c.$indep_var] if _n == `count'
 			replace xaxis           = `quarter'                        if _n == `count'
 			
 			summarize `rate_var' if `var'==`quarter'
@@ -115,41 +142,96 @@ if `differenced' {
 		gen freehold_lb  = freehold_coeff  - 1.96*freehold_se
 		
 		* Coefficient vs year scatter plots
-		twoway (scatter leasehold_coeff xaxis, yaxis(1)) ///
-			   (rcap leasehold_ub leasehold_lb xaxis, yaxis(1)) ///
-			   (lfit leasehold_coeff xaxis, yaxis(1)) ///
-			   (line rate xaxis, yaxis(2) lpattern(solid) lcolor(black) lwidth(medthick)), ///
-			   legend(off) xtitle("Year") ytitle("Coefficient") ytitle("Interest Rate", axis(2))
-		graph export "$FIGURES/leasehold_snowballing_by_quarter_`var'_nofe.png", replace
-		
-		twoway (scatter leasehold_coeff xaxis, yaxis(1)) ///
-			   (rcap leasehold_ub leasehold_lb xaxis, yaxis(1)) ///
-			   (lfit leasehold_coeff xaxis, yaxis(1)) ///
-			   (line rate xaxis, yaxis(2) lpattern(solid) lcolor(black) lwidth(medthick)) if xaxis >= 2000, ///
-			   legend(off) xtitle("Year") ytitle("Coefficient") ytitle("Interest Rate", axis(2))
-		graph export "$FIGURES/leasehold_snowballing_by_quarter_zoomed_`var'_nofe.png", replace
 		
 		twoway (scatter freehold_coeff xaxis, yaxis(1)) ///
 			   (rcap freehold_ub freehold_lb xaxis, yaxis(1)) ///
 			   (lfit freehold_coeff xaxis, yaxis(1)) ///
 			   (line rate xaxis, yaxis(2) lpattern(solid) lcolor(black) lwidth(medthick)), ///
 			   legend(off) xtitle("Year") ytitle("Coefficient") ytitle("Interest Rate", axis(2))
-		graph export "$FIGURES/freehold_snowballing_by_quarter_`var'_nofe.png", replace
+		graph export "$FIGURES/freehold_snowballing_by_quarter_`var'.png", replace
+		
+		twoway (scatter freehold_coeff xaxis, yaxis(1)) ///
+			   (rcap freehold_ub freehold_lb xaxis, yaxis(1)) ///
+			   (lfit freehold_coeff xaxis, yaxis(1)) ///
+			   (line rate xaxis, yaxis(2) lpattern(solid) lcolor(black) lwidth(medthick)) if xaxis >= 2000, ///
+			   legend(off) xtitle("Year") ytitle("Coefficient") ytitle("Interest Rate", axis(2))
+		graph export "$FIGURES/freehold_snowballing_by_quarter_zoomed_`var'.png", replace
+		
+		twoway (scatter freehold_coeff xaxis, yaxis(1)) ///
+			   (rcap freehold_ub freehold_lb xaxis, yaxis(1)) ///
+			   (lfit freehold_coeff xaxis, yaxis(1)) ///
+			   (line rate xaxis, yaxis(2) lpattern(solid) lcolor(black) lwidth(medthick)) if xaxis <= 2015, ///
+			   legend(off) xtitle("Year") ytitle("Coefficient") ytitle("Interest Rate", axis(2))
+		graph export "$FIGURES/freehold_snowballing_by_quarter_zoomed_down_`var'.png", replace
+		
+		twoway (scatter leasehold_coeff xaxis, yaxis(1)) ///
+			   (rcap leasehold_ub leasehold_lb xaxis, yaxis(1)) ///
+			   (lfit leasehold_coeff xaxis, yaxis(1)) ///
+			   (line rate xaxis, yaxis(2) lpattern(solid) lcolor(black) lwidth(medthick)), ///
+			   legend(off) xtitle("Year") ytitle("Coefficient") ytitle("Interest Rate", axis(2))
+		graph export "$FIGURES/leasehold_snowballing_by_quarter_`var'.png", replace
+		
+		twoway (scatter leasehold_coeff xaxis, yaxis(1)) ///
+			   (rcap leasehold_ub leasehold_lb xaxis, yaxis(1)) ///
+			   (lfit leasehold_coeff xaxis, yaxis(1)) ///
+			   (line rate xaxis, yaxis(2) lpattern(solid) lcolor(black) lwidth(medthick)) if xaxis >= 2000, ///
+			   legend(off) xtitle("Year") ytitle("Coefficient") ytitle("Interest Rate", axis(2))
+		graph export "$FIGURES/leasehold_snowballing_by_quarter_zoomed_`var'.png", replace
+		
+		twoway (scatter leasehold_coeff xaxis, yaxis(1)) ///
+			   (rcap leasehold_ub leasehold_lb xaxis, yaxis(1)) ///
+			   (lfit leasehold_coeff xaxis, yaxis(1)) ///
+			   (line rate xaxis, yaxis(2) lpattern(solid) lcolor(black) lwidth(medthick)) if xaxis <= 2015, ///
+			   legend(off) xtitle("Year") ytitle("Coefficient") ytitle("Interest Rate", axis(2))
+		graph export "$FIGURES/leasehold_snowballing_by_quarter_zoomed_down_`var'.png", replace
+		
+		* Without interest rate overlayed
+
+		twoway (scatter freehold_coeff xaxis, yaxis(1)) ///
+			   (rcap freehold_ub freehold_lb xaxis, yaxis(1)) ///
+			   (lfit freehold_coeff xaxis, yaxis(1)) , ///
+			   legend(off) xtitle("Year") ytitle("Coefficient")
+		graph export "$FIGURES/freehold_snowballing_by_quarter_norate_`var'.png", replace
 		
 		twoway (scatter freehold_coeff xaxis) ///
 			   (rcap freehold_ub freehold_lb xaxis) ///
-			   (lfit freehold_coeff xaxis, lwidth(thick)) ///
-			   (line rate xaxis, yaxis(2) lpattern(solid) lcolor(black) lwidth(medthick)) if xaxis >= 2000 , ///
-			   legend(4 "Interest Rate") xtitle("Year") ytitle("Coefficient") ytitle("Interest Rate", axis(2))
-		graph export "$FIGURES/freehold_snowballing_by_quarter_zoomed_`var'_nofe.png", replace
+			   (lfit freehold_coeff xaxis, lwidth(thick))  if xaxis >= 2000 , ///
+			   legend(off) xtitle("Year") ytitle("Coefficient")
+		graph export "$FIGURES/freehold_snowballing_by_quarter_norate_zoomed_`var'.png", replace
+		
+		local var "date_trans"
+		twoway (scatter freehold_coeff xaxis) ///
+			   (rcap freehold_ub freehold_lb xaxis) ///
+			   (lfit freehold_coeff xaxis, lwidth(thick))  if xaxis <= 2015 , ///
+			   legend(off) xtitle("Year") ytitle("Coefficient")
+		graph export "$FIGURES/freehold_snowballing_by_quarter_norate_zoomed_down_`var'.png", replace
+		
+		local var date_trans
+		twoway (scatter leasehold_coeff xaxis, yaxis(1)) ///
+			   (rcap leasehold_ub leasehold_lb xaxis, yaxis(1)) ///
+			   (lfit leasehold_coeff xaxis, yaxis(1)) , ///
+			   legend(off) xtitle("Year") ytitle("Coefficient")
+		graph export "$FIGURES/leasehold_snowballing_by_quarter_norate_`var'.png", replace
+		
+		twoway (scatter leasehold_coeff xaxis, yaxis(1)) ///
+			   (rcap leasehold_ub leasehold_lb xaxis, yaxis(1)) ///
+			   (lfit leasehold_coeff xaxis, yaxis(1)) if xaxis >= 2000, ///
+			   legend(off) xtitle("Year") ytitle("Coefficient")
+		graph export "$FIGURES/leasehold_snowballing_by_quarter_norate_zoomed_`var'.png", replace
+		
+		twoway (scatter leasehold_coeff xaxis, yaxis(1)) ///
+			   (rcap leasehold_ub leasehold_lb xaxis, yaxis(1)) ///
+			   (lfit leasehold_coeff xaxis, yaxis(1)) if xaxis <= 2015, ///
+			   legend(off) xtitle("Year") ytitle("Coefficient")
+		graph export "$FIGURES/leasehold_snowballing_by_quarter_norate_zoomed_down_`var'.png", replace
 		
 		
-// 		* Coefficient vs interest rate binscatters
-// 		binscatter2 leasehold_coeff rate, xtitle("Interest Rate") ytitle("Coefficient") nquantiles(50)
-// 		graph export "$FIGURES/leasehold_snowballing_by_rate_binscatter_`var'_nofe.png", replace
-//		
-// 		binscatter2 freehold_coeff rate, xtitle("Interest Rate") ytitle("Coefficient") nquantiles(50)
-// 		graph export "$FIGURES/freehold_snowballing_by_rate_binscatter_`var'_nofe.png", replace
+		* Coefficient vs interest rate binscatters
+		binscatter2 leasehold_coeff rate, xtitle("Interest Rate") ytitle("Coefficient") nquantiles(50)
+		graph export "$FIGURES/leasehold_snowballing_by_rate_binscatter_`var'_nofe.png", replace
+		
+		binscatter2 freehold_coeff rate, xtitle("Interest Rate") ytitle("Coefficient") nquantiles(50)
+		graph export "$FIGURES/freehold_snowballing_by_rate_binscatter_`var'_nofe.png", replace
 		
 	}
 	
